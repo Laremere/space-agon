@@ -3,6 +3,14 @@
     <meta charset="utf-8"/>
     <script src="/static/wasm_exec.js"></script>
     <script>
+      var whenLoaded = function(f) {
+        window.onload = f;
+      }
+      window.onload = function() {
+        whenLoaded = function(f) {
+          f();
+        }
+      }
       const go = new Go();
       WebAssembly.instantiateStreaming(fetch("/static/client.wasm"), go.importObject).then((result) => {
         go.run(result.instance);
@@ -10,6 +18,7 @@
     </script>
   </head>
   <body>
+    <image id="spritesheet" hidden src="/static/spritesheet.png"></image>
     <canvas id="game" width="1000" height="700"></canvas>
   </body>
 </html>

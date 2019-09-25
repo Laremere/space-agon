@@ -22,16 +22,22 @@ import (
 	"syscall/js"
 )
 
+type Capability js.Value
 type BufferBit int
 type BufferTarget js.Value
 type BufferUsage js.Value
+type TextureTarget js.Value
+type TextureFormat js.Value
+type TextureUnit js.Value
+type BlendFactor js.Value
 type ShaderType js.Value
 type ProgramParameterBool js.Value
 type ShaderParameterBool js.Value
 type DrawMode js.Value
-type ArrayTypes js.Value
+type GlType js.Value
 
 type Buffer js.Value
+type Texture js.Value
 type Program js.Value
 type Shader js.Value
 type UniformLocation js.Value
@@ -40,23 +46,34 @@ type AttribLocation js.Value
 type WebGL struct {
 	canvas, gl js.Value
 
+	BLEND Capability
+
 	COLOR_BUFFER_BIT BufferBit
 	DEPTH_BUFFER_BIT BufferBit
-
-	VERTEX_SHADER   ShaderType
-	FRAGMENT_SHADER ShaderType
 
 	ARRAY_BUFFER BufferTarget
 	STATIC_DRAW  BufferUsage
 	DYNAMIC_DRAW BufferUsage
 
-	LINK_STATUS    ProgramParameterBool
-	COMPILE_STATUS ShaderParameterBool
+	TEXTURE_2D TextureTarget
+	RGBA       TextureFormat
+	TEXTURE0   TextureUnit
+
+	ZERO                BlendFactor
+	ONE                 BlendFactor
+	SRC_ALPHA           BlendFactor
+	ONE_MINUS_SRC_ALPHA BlendFactor
+
+	VERTEX_SHADER   ShaderType
+	FRAGMENT_SHADER ShaderType
+	LINK_STATUS     ProgramParameterBool
+	COMPILE_STATUS  ShaderParameterBool
 
 	TRIANGLES DrawMode
 
-	FLOAT ArrayTypes
-	SHORT ArrayTypes
+	UNSIGNED_BYTE GlType
+	FLOAT         GlType
+	SHORT         GlType
 }
 
 func InitWebgl(canvas js.Value) (*WebGL, error) {
@@ -69,6 +86,8 @@ func InitWebgl(canvas js.Value) (*WebGL, error) {
 		return nil, errors.New("Creating a webgl context is not supported.  This won't work.")
 	}
 
+	w.BLEND = Capability(w.gl.Get("BLEND"))
+
 	w.COLOR_BUFFER_BIT = BufferBit(w.gl.Get("COLOR_BUFFER_BIT").Int())
 	w.DEPTH_BUFFER_BIT = BufferBit(w.gl.Get("DEPTH_BUFFER_BIT").Int())
 
@@ -77,16 +96,26 @@ func InitWebgl(canvas js.Value) (*WebGL, error) {
 	w.STATIC_DRAW = BufferUsage(w.gl.Get("STATIC_DRAW"))
 	w.DYNAMIC_DRAW = BufferUsage(w.gl.Get("DYNAMIC_DRAW"))
 
-	w.LINK_STATUS = ProgramParameterBool(w.gl.Get("LINK_STATUS"))
-	w.COMPILE_STATUS = ShaderParameterBool(w.gl.Get("COMPILE_STATUS"))
+	w.TEXTURE_2D = TextureTarget(w.gl.Get("TEXTURE_2D"))
+	w.RGBA = TextureFormat(w.gl.Get("RGBA"))
+	w.TEXTURE0 = TextureUnit(w.gl.Get("TEXTURE0"))
+
+	w.ZERO = BlendFactor(w.gl.Get("ZERO"))
+	w.ONE = BlendFactor(w.gl.Get("ONE"))
+	w.SRC_ALPHA = BlendFactor(w.gl.Get("SRC_ALPHA"))
+	w.ONE_MINUS_SRC_ALPHA = BlendFactor(w.gl.Get("ONE_MINUS_SRC_ALPHA"))
 
 	w.VERTEX_SHADER = ShaderType(w.gl.Get("VERTEX_SHADER"))
 	w.FRAGMENT_SHADER = ShaderType(w.gl.Get("FRAGMENT_SHADER"))
 
+	w.LINK_STATUS = ProgramParameterBool(w.gl.Get("LINK_STATUS"))
+	w.COMPILE_STATUS = ShaderParameterBool(w.gl.Get("COMPILE_STATUS"))
+
 	w.TRIANGLES = DrawMode(w.gl.Get("TRIANGLES"))
 
-	w.FLOAT = ArrayTypes(w.gl.Get("FLOAT"))
-	w.SHORT = ArrayTypes(w.gl.Get("SHORT"))
+	w.FLOAT = GlType(w.gl.Get("FLOAT"))
+	w.SHORT = GlType(w.gl.Get("SHORT"))
+	w.UNSIGNED_BYTE = GlType(w.gl.Get("UNSIGNED_BYTE"))
 
 	return &w, nil
 }
@@ -97,6 +126,10 @@ func (w *WebGL) ClearColor(r, g, b, a float64) {
 
 func (w *WebGL) Clear(colorBits BufferBit) {
 	w.gl.Call("clear", int(colorBits))
+}
+
+func (w *WebGL) Enable(c Capability) {
+	w.gl.Call("enable", js.Value(c))
 }
 
 /////////////////////////////////////////////
@@ -124,6 +157,35 @@ func (w *WebGL) BufferSubDataI16(t BufferTarget, offset int, a []int16) {
 	w.gl.Call("bufferSubData", js.Value(t), offset, copyInt16SliceToJS(a))
 }
 
+func (w *WebGL) BufferSubDataF32(t BufferTarget, offset int, a []float32) {
+	w.gl.Call("bufferSubData", js.Value(t), offset, copyFloat32SliceToJS(a))
+}
+
+/////////////////////////////////////////////
+// Texture
+/////////////////////////////////////////////
+
+func (w *WebGL) CreateTexture() *Texture {
+	t := Texture(w.gl.Call("createTexture"))
+	return &t
+}
+
+func (w *WebGL) BindTexture(tt TextureTarget, t *Texture) {
+	w.gl.Call("bindTexture", js.Value(tt), js.Value(*t))
+}
+
+func (w *WebGL) TexImage2D(target TextureTarget, level int, internalFormat TextureFormat, format TextureFormat, type_ GlType, pixels js.Value) {
+	w.gl.Call("texImage2D", js.Value(target), level, js.Value(internalFormat), js.Value(format), js.Value(type_), pixels)
+}
+
+func (w *WebGL) GenerateMipmap(target TextureTarget) {
+	w.gl.Call("generateMipmap", js.Value(target))
+}
+
+func (w *WebGL) ActiveTexture(u TextureUnit) {
+	w.gl.Call("activeTexture", js.Value(u))
+}
+
 /////////////////////////////////////////////
 // Program
 /////////////////////////////////////////////
@@ -139,6 +201,10 @@ func (w *WebGL) AttachShader(p *Program, s *Shader) {
 
 func (w *WebGL) LinkProgram(p *Program) {
 	w.gl.Call("linkProgram", js.Value(*p))
+}
+
+func (w *WebGL) ValidateProgram(p *Program) {
+	w.gl.Call("validateProgram", js.Value(*p))
 }
 
 func (w *WebGL) GetProgramParameterBool(p *Program, param ProgramParameterBool) bool {
@@ -190,6 +256,10 @@ func (w *WebGL) GetShaderInfoLog(s *Shader) string {
 // Shader parameters and draw calls
 /////////////////////////////////////////////
 
+func (w *WebGL) Uniform1i(u UniformLocation, v int) {
+	w.gl.Call("uniform1i", js.Value(u), v)
+}
+
 func (w *WebGL) Uniform2fv(u UniformLocation, v [2]float64) {
 	w.gl.Call("uniform2fv", js.Value(u), copyFloat64SliceToJS(v[:]))
 }
@@ -203,13 +273,21 @@ func (w *WebGL) EnableVertexAttribArray(a AttribLocation) {
 }
 
 func (w *WebGL) VertexAttribPointer(
-	a AttribLocation, size int, arrayTypes ArrayTypes, normalized bool, stride, offset int64) {
+	a AttribLocation, size int, arrayType GlType, normalized bool, stride, offset int64) {
 
-	w.gl.Call("vertexAttribPointer", js.Value(a), size, js.Value(arrayTypes), normalized, stride, offset)
+	w.gl.Call("vertexAttribPointer", js.Value(a), size, js.Value(arrayType), normalized, stride, offset)
 }
 
 func (w *WebGL) DrawArrays(mode DrawMode, first, size int) {
 	w.gl.Call("drawArrays", js.Value(mode), first, size)
+}
+
+func (w *WebGL) GetError() js.Value {
+	return w.gl.Call("getError")
+}
+
+func (w *WebGL) BlendFunc(sfactor, dfactor BlendFactor) {
+	w.gl.Call("blendFunc", js.Value(sfactor), js.Value(dfactor))
 }
 
 /////////////////////////////////////////////
@@ -231,6 +309,7 @@ func CreateProgram(w *WebGL, vertexShaderCode, fragmentShaderCode string) (*Prog
 	w.AttachShader(p, vertexShader)
 	w.AttachShader(p, fragmentShader)
 	w.LinkProgram(p)
+	w.ValidateProgram(p)
 
 	if !w.GetProgramParameterBool(p, w.LINK_STATUS) {
 		return nil, fmt.Errorf("Error linking shader: %s", err)
@@ -254,12 +333,10 @@ func CompileShader(w *WebGL, code string, t ShaderType) (*Shader, error) {
 // TODO: Javascript types arrays are backed by byte buffers.  It may be faster
 // to convert the golang slice into a byte buffer, and use js.CopyBytesToJS.
 // However there are possible endian issues.  I believe this method must be used
-// to properly trasmit 64 bit numbers, and the conversion to and from floats is
+// to properly trasmit 64 bit numbers, as the conversion to and from floats is
 // lossy.
 func copyFloat64SliceToJS(a []float64) js.Value {
-	const bytesPerValue = 64 / 8
-	global := js.Global()
-	r := global.New("Float64Array", global.New("ArrayBuffer", js.ValueOf(len(a)*bytesPerValue)))
+	r := js.Global().Get("Float64Array").New(len(a))
 	for i, v := range a {
 		r.SetIndex(i, js.ValueOf(v))
 	}
@@ -267,9 +344,7 @@ func copyFloat64SliceToJS(a []float64) js.Value {
 }
 
 func copyFloat32SliceToJS(a []float32) js.Value {
-	const bytesPerValue = 32 / 8
-	global := js.Global()
-	r := global.New("Float32Array", global.New("ArrayBuffer", js.ValueOf(len(a)*bytesPerValue)))
+	r := js.Global().Get("Float32Array").New(len(a))
 	for i, v := range a {
 		r.SetIndex(i, js.ValueOf(v))
 	}
@@ -277,11 +352,17 @@ func copyFloat32SliceToJS(a []float32) js.Value {
 }
 
 func copyInt16SliceToJS(a []int16) js.Value {
-	const bytesPerValue = 16 / 8
-	global := js.Global()
-	r := global.New("Int16Array", global.New("ArrayBuffer", js.ValueOf(len(a)*bytesPerValue)))
+	r := js.Global().Get("Int16Array").New(len(a))
 	for i, v := range a {
 		r.SetIndex(i, js.ValueOf(v))
 	}
 	return r
+}
+
+func LoadTexture(w *WebGL, image js.Value) *Texture {
+	t := w.CreateTexture()
+	w.BindTexture(w.TEXTURE_2D, t)
+	w.TexImage2D(w.TEXTURE_2D, 0, w.RGBA, w.RGBA, w.UNSIGNED_BYTE, image)
+	w.GenerateMipmap(w.TEXTURE_2D)
+	return t
 }
