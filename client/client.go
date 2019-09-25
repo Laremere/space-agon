@@ -201,7 +201,7 @@ type Sprite struct {
 var (
 	Spaceship = &Sprite{
 		textureCoords: genTexCoords(0, 0, 0.25, 0.25),
-		size:          0.5,
+		size:          1,
 
 		//   []float32{
 		// 	0, 0,
@@ -247,8 +247,10 @@ func (g *graphics) Sprite(s *Sprite, centerx, centery, rotation float32) {
 	coords := g.coords[g.written : g.written+12]
 	textureCoords := g.textureCoords[g.written : g.written+12]
 
-	cosSize := s.size * float32(math.Cos(float64(rotation)+(math.Pi/4))) * math.Sqrt2
-	sinSize := s.size * float32(math.Cos(float64(rotation)+(math.Pi/4))) * math.Sqrt2
+	cosSize := s.size * float32(math.Cos(float64(rotation)+(math.Pi/4))) * math.Sqrt2 / 2
+	sinSize := s.size * float32(math.Sin(float64(rotation)+(math.Pi/4))) * math.Sqrt2 / 2
+
+	log.Println("rotation", rotation, "cos", cosSize, "sin", sinSize)
 
 	coords[0] = centerx - sinSize
 	coords[1] = centery + cosSize
@@ -257,7 +259,7 @@ func (g *graphics) Sprite(s *Sprite, centerx, centery, rotation float32) {
 	coords[3] = centery - sinSize
 
 	coords[4] = centerx + sinSize
-	coords[5] = centery - sinSize
+	coords[5] = centery - cosSize
 	coords[6] = coords[0]
 	coords[7] = coords[1]
 
