@@ -16,6 +16,7 @@ package game
 
 import (
 	"math"
+	"math/rand"
 )
 
 type Game struct {
@@ -57,12 +58,13 @@ func (k *Keystate) Up() {
 }
 
 type Input struct {
-	Up    Keystate
-	Down  Keystate
-	Left  Keystate
-	Right Keystate
-	Fire  Keystate
-	Dt    float32
+	Up         Keystate
+	Down       Keystate
+	Left       Keystate
+	Right      Keystate
+	Fire       Keystate
+	Dt         float32
+	IsRendered bool
 }
 
 func (inp *Input) FrameEndReset() {
@@ -75,23 +77,62 @@ func (inp *Input) FrameEndReset() {
 
 func (g *Game) Step(input *Input) {
 	if !g.initialized {
-		i := g.E.NewIter()
-		i.Require(PosKey)
-		i.Require(RotKey)
-		i.Require(SpriteKey)
-		i.Require(PlayerControlledShipKey)
-		i.Require(KeepInCameraKey)
-		i.Require(SpinKey)
-		i.Require(MomentumKey)
-		i.New()
+		{ // Spawn Spaceship
+			i := g.E.NewIter()
+			i.Require(PosKey)
+			i.Require(RotKey)
+			i.Require(SpriteKey)
+			i.Require(PlayerControlledShipKey)
+			i.Require(KeepInCameraKey)
+			i.Require(SpinKey)
+			i.Require(MomentumKey)
+			i.New()
 
-		pos := i.Pos()
-		(*pos)[0] = 0
-		(*pos)[1] = 0
-		*i.Sprite() = SpriteShip
-		*i.Rot() = 0
+			pos := i.Pos()
+			(*pos)[0] = 0
+			(*pos)[1] = 0
+			*i.Sprite() = SpriteShip
+			*i.Rot() = 0
+		}
+
+		{ // spawn stars
+			i := g.E.NewIter()
+			i.Require(PosKey)
+			i.Require(SpriteKey)
+			i.New()
+			// Big star
+			*i.Sprite() = SpriteStar
+
+			// spawn small stars
+			for j := 0; j < 100; j++ {
+				i.New()
+				*i.Sprite() = SpriteStarBit
+				const starBoxRadius = 50
+				*i.Pos() = Vec2{
+					rand.Float32()*starBoxRadius*2 - starBoxRadius,
+					rand.Float32()*starBoxRadius*2 - starBoxRadius,
+				}
+			}
+		}
 
 		g.initialized = true
+	}
+
+	if input.IsRendered { // Spawn sun particles
+		i := g.E.NewIter()
+		i.Require(PosKey)
+		i.Require(SpriteKey)
+		i.Require(MomentumKey)
+		i.Require(TimedDestroyKey)
+		i.New()
+
+		*i.Sprite() = SpriteStarBit
+
+		rad := rand.Float32() * 2 * math.Pi
+		*i.Pos() = Vec2FromRadians(rad)
+		rad += rand.Float32() - 0.5
+		*i.Momentum() = Vec2FromRadians(rad).Scale(rand.Float32()*5 + 1)
+		*i.TimedDestroy() = rand.Float32()*2 + 1
 	}
 
 	{

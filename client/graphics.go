@@ -23,6 +23,7 @@ import (
 	"syscall/js"
 
 	"github.com/googleforgames/space-agon/client/webgl"
+	"github.com/googleforgames/space-agon/game"
 )
 
 type graphics struct {
@@ -162,30 +163,30 @@ type Sprite struct {
 	size          float32
 }
 
-var (
-	Spaceship = &Sprite{
-		textureCoords: genTexCoords(0, 0, 0.25, 0.25),
+var spritemap = map[game.Sprite]*Sprite{
+	game.SpriteShip: &Sprite{
+		textureCoords: genTexCoords(0, 0, 512, 512),
 		size:          1,
-
-		//   []float32{
-		//  0, 0,
-		//  0, 1 / 8,
-		//  1 / 8, 1 / 8,
-		//  0, 0,
-		//  1 / 8, 1 / 8,
-		//  1 / 8, 0,
-
-		//  // 0, 0,
-		//  // 0, 1 / 2,
-		//  // 1 / 2, 1 / 2,
-		//  // 0, 0,
-		//  // 1, 1,
-		//  // 1, 0,
-		// },
-	}
-)
+	},
+	game.SpriteStar: &Sprite{
+		textureCoords: genTexCoords(0, 512, 512, 1024),
+		size:          10,
+	},
+	game.SpriteStarBit: &Sprite{
+		textureCoords: genTexCoords(0, 512, 512, 1024),
+		size:          0.1,
+	},
+}
 
 func genTexCoords(xStart, yStart, xEnd, yEnd float32) []float32 {
+	const width = 2048
+	const height = width
+
+	xStart /= width
+	xEnd /= width
+	yStart /= height
+	yEnd /= height
+
 	return []float32{
 		xStart, yStart,
 		xStart, yEnd,

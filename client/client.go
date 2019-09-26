@@ -38,7 +38,9 @@ func main() {
 }
 
 func newClient() (*client, error) {
-	inp := &game.Input{}
+	inp := &game.Input{
+		IsRendered: true,
+	}
 	js.Global().Get("document").Call("addEventListener", "keydown", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		// log.Println("keydown", args[0].Get("code").String())
 		switch args[0].Get("code").String() {
@@ -127,7 +129,7 @@ func (c *client) frame() {
 
 			sprite := i.Sprite()
 			if sprite != nil {
-				boundary = spritemap[*sprite].size
+				boundary = spritemap[*sprite].size * 2
 			}
 
 			if x-boundary < xMin {
@@ -170,9 +172,4 @@ func (c *client) frame() {
 	c.inp.FrameEndReset()
 
 	c.scheduleFrame()
-}
-
-// TODO: Just make this a map from game's sprite to values.
-var spritemap = map[game.Sprite]*Sprite{
-	game.SpriteShip: Spaceship,
 }

@@ -14,6 +14,8 @@
 
 package game
 
+import "math"
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -25,20 +27,27 @@ type Sprite uint16
 const (
 	SpriteUnset = Sprite(iota)
 	SpriteShip
-	SpirteMissile
+	SpriteMissile
+	SpriteStar
+	SpriteStarBit
 )
 
-type vec2 [2]float32
+type Vec2 [2]float32
 
-func (v vec2) Scale(s float32) vec2 {
-	return vec2{v[0] * s, v[1] * s}
+func Vec2FromRadians(rad float32) Vec2 {
+	sin, cos := math.Sincos(float64(rad))
+	return Vec2{float32(cos), float32(sin)}
 }
 
-func (v vec2) Add(o vec2) vec2 {
-	return vec2{v[0] + o[0], v[1] * o[1]}
+func (v Vec2) Scale(s float32) Vec2 {
+	return Vec2{v[0] * s, v[1] * s}
 }
 
-func (v *vec2) AddEqual(o vec2) {
+func (v Vec2) Add(o Vec2) Vec2 {
+	return Vec2{v[0] + o[0], v[1] * o[1]}
+}
+
+func (v *Vec2) AddEqual(o Vec2) {
 	(*v)[0] += o[0]
 	(*v)[1] += o[1]
 }
@@ -49,14 +58,14 @@ func (v *vec2) AddEqual(o vec2) {
 // Comp definitions, add for each new type of component.
 ////////////////////////////////////////////////////////////////////////////////
 
-type Vec2Comp []vec2
+type Vec2Comp []Vec2
 
 func (c *Vec2Comp) Swap(i, j int) {
 	(*c)[i], (*c)[j] = (*c)[j], (*c)[i]
 }
 
 func (c *Vec2Comp) Extend() {
-	*c = append(*c, vec2{})
+	*c = append(*c, Vec2{})
 }
 
 func (c *Vec2Comp) RemoveLast() {
@@ -167,7 +176,7 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 	return bag
 }
 
-func (iter *Iter) Pos() *vec2 {
+func (iter *Iter) Pos() *Vec2 {
 	comp := iter.e.bags[iter.i].Pos
 	if comp == nil {
 		return nil
@@ -199,7 +208,7 @@ func (iter *Iter) TimedDestroy() *float32 {
 	return &(*comp)[iter.j]
 }
 
-func (iter *Iter) Momentum() *vec2 {
+func (iter *Iter) Momentum() *Vec2 {
 	comp := iter.e.bags[iter.i].Momentum
 	if comp == nil {
 		return nil
