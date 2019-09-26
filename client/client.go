@@ -115,10 +115,10 @@ func (c *client) frame() {
 		i.Require(game.PosKey)
 		i.Require(game.KeepInCameraKey)
 
-		xMin := float32(-20)
-		yMin := float32(-20)
-		xMax := float32(20)
-		yMax := float32(20)
+		xMin := float32(-10)
+		yMin := float32(-10)
+		xMax := float32(10)
+		yMax := float32(10)
 
 		for i.Next() {
 			x := (*i.Pos())[0]

@@ -17,17 +17,46 @@ package game
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
+// Component types
+////////////////////////////////////////////////////////////////////////////////
+
+type Sprite uint16
+
+const (
+	SpriteUnset = Sprite(iota)
+	SpriteShip
+	SpirteMissile
+)
+
+type vec2 [2]float32
+
+func (v vec2) Scale(s float32) vec2 {
+	return vec2{v[0] * s, v[1] * s}
+}
+
+func (v vec2) Add(o vec2) vec2 {
+	return vec2{v[0] + o[0], v[1] * o[1]}
+}
+
+func (v *vec2) AddEqual(o vec2) {
+	(*v)[0] += o[0]
+	(*v)[1] += o[1]
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 // Comp definitions, add for each new type of component.
 ////////////////////////////////////////////////////////////////////////////////
 
-type Vec2Comp [][2]float32
+type Vec2Comp []vec2
 
 func (c *Vec2Comp) Swap(i, j int) {
 	(*c)[i], (*c)[j] = (*c)[j], (*c)[i]
 }
 
 func (c *Vec2Comp) Extend() {
-	*c = append(*c, [2]float32{})
+	*c = append(*c, vec2{})
 }
 
 func (c *Vec2Comp) RemoveLast() {
@@ -74,6 +103,8 @@ const (
 	SpriteKey
 	RotKey
 	TimedDestroyKey
+	MomentumKey
+	SpinKey
 
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
@@ -92,6 +123,8 @@ type EntityBag struct {
 	Sprite       *SpriteComp
 	Rot          *FloatComp
 	TimedDestroy *FloatComp
+	Momentum     *Vec2Comp
+	Spin         *FloatComp
 }
 
 func newEntityBag(compsKey *compsKey) *EntityBag {
@@ -121,10 +154,20 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 		bag.comps = append(bag.comps, bag.TimedDestroy)
 	}
 
+	if inRequirement(compsKey, MomentumKey) {
+		bag.Momentum = &Vec2Comp{}
+		bag.comps = append(bag.comps, bag.Momentum)
+	}
+
+	if inRequirement(compsKey, SpinKey) {
+		bag.Spin = &FloatComp{}
+		bag.comps = append(bag.comps, bag.Spin)
+	}
+
 	return bag
 }
 
-func (iter *Iter) Pos() *[2]float32 {
+func (iter *Iter) Pos() *vec2 {
 	comp := iter.e.bags[iter.i].Pos
 	if comp == nil {
 		return nil
@@ -150,6 +193,22 @@ func (iter *Iter) Rot() *float32 {
 
 func (iter *Iter) TimedDestroy() *float32 {
 	comp := iter.e.bags[iter.i].TimedDestroy
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) Momentum() *vec2 {
+	comp := iter.e.bags[iter.i].Momentum
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) Spin() *float32 {
+	comp := iter.e.bags[iter.i].Spin
 	if comp == nil {
 		return nil
 	}

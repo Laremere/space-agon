@@ -18,14 +18,6 @@ import (
 	"math"
 )
 
-type Sprite uint16
-
-const (
-	SpriteUnset = Sprite(iota)
-	SpriteShip
-	SpirteMissile
-)
-
 type Game struct {
 	E           *Entities
 	initialized bool
@@ -89,6 +81,8 @@ func (g *Game) Step(input *Input) {
 		i.Require(SpriteKey)
 		i.Require(PlayerControlledShipKey)
 		i.Require(KeepInCameraKey)
+		i.Require(SpinKey)
+		i.Require(MomentumKey)
 		i.New()
 
 		pos := i.Pos()
@@ -116,24 +110,64 @@ func (g *Game) Step(input *Input) {
 		i.Require(PosKey)
 		i.Require(RotKey)
 		i.Require(PlayerControlledShipKey)
+		i.Require(SpinKey)
+		i.Require(MomentumKey)
 		for i.Next() {
-			const rotationSpeed = 3
-			const forwardSpeed = 10
+			const rotationForSpeed = 5
+			const rotationAgainstSpeed = 10
+			const forwardSpeed = 2
 
+			spinDesire := float32(0)
 			if input.Left.Hold {
-				*i.Rot() += rotationSpeed * input.Dt
+				spinDesire++
 			}
 			if input.Right.Hold {
-				*i.Rot() -= rotationSpeed * input.Dt
+				spinDesire--
 			}
+			if !input.Left.Hold && !input.Right.Hold {
+				if *i.Spin() < 0 {
+					spinDesire += 0.1
+				} else {
+					spinDesire -= 0.1
+				}
+			}
+
+			// Game feel: Stopping spin is easier than starting it.
+			if (spinDesire < 0) == (*i.Spin() < 0) {
+				spinDesire *= rotationForSpeed
+			} else {
+				spinDesire *= rotationAgainstSpeed
+			}
+
+			*i.Spin() += spinDesire * input.Dt
 
 			if input.Up.Hold {
 				dx := float32(math.Cos(float64(*i.Rot()))) * forwardSpeed * input.Dt
 				dy := float32(math.Sin(float64(*i.Rot()))) * forwardSpeed * input.Dt
 
-				(*i.Pos())[0] += dx
-				(*i.Pos())[1] += dy
+				(*i.Momentum())[0] += dx
+				(*i.Momentum())[1] += dy
 			}
+		}
+	}
+
+	{
+		i := g.E.NewIter()
+		i.Require(RotKey)
+		i.Require(SpinKey)
+
+		for i.Next() {
+			*i.Rot() += *i.Spin() * input.Dt
+		}
+	}
+
+	{
+		i := g.E.NewIter()
+		i.Require(PosKey)
+		i.Require(MomentumKey)
+
+		for i.Next() {
+			i.Pos().AddEqual(i.Momentum().Scale(input.Dt))
 		}
 	}
 
