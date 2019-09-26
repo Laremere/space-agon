@@ -114,6 +114,37 @@ func (c *client) frame() {
 		i := c.g.E.NewIter()
 		i.Require(game.PosKey)
 		i.Require(game.KeepInCameraKey)
+
+		xMin := float32(-20)
+		yMin := float32(-20)
+		xMax := float32(20)
+		yMax := float32(20)
+
+		for i.Next() {
+			x := (*i.Pos())[0]
+			y := (*i.Pos())[1]
+			boundary := float32(0)
+
+			sprite := i.Sprite()
+			if sprite != nil {
+				boundary = spritemap[*sprite].size
+			}
+
+			if x-boundary < xMin {
+				xMin = x - boundary
+			}
+			if x+boundary > xMax {
+				xMax = x + boundary
+			}
+			if y-boundary < yMin {
+				yMin = y - boundary
+			}
+			if y+boundary > yMax {
+				yMax = y + boundary
+			}
+		}
+
+		c.gr.SetCamera(xMin, yMin, xMax, yMax)
 	}
 
 	// count := 0

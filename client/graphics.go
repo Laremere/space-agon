@@ -39,6 +39,9 @@ type graphics struct {
 	textureCoords       []float32
 	textureCoordsBuffer *webgl.Buffer
 
+	uCenter [2]float32
+	uScale  [2]float32
+
 	written int
 }
 
@@ -67,13 +70,16 @@ func NewGraphics() (*graphics, error) {
 	g.shader, err = webgl.CreateProgram(
 		g.w,
 		`
+    uniform vec2 uCenter;
+    uniform vec2 uScale; 
+
     attribute vec2 aVertexPosition;
     attribute vec2 aTextureCoord;
 
     varying highp vec2 vTextureCoord;
 
     void main() {
-      gl_Position = vec4(aVertexPosition, 0.0, 1.0);
+      gl_Position = vec4((aVertexPosition-uCenter)/uScale, 0.0, 1.0);
       vTextureCoord = aTextureCoord;
     }`,
 		`
@@ -115,6 +121,12 @@ func (g *graphics) Flush() {
 	}
 
 	g.w.UseProgram(g.shader)
+
+	uCenter := g.w.GetUniformLocation(g.shader, "uCenter")
+	g.w.Uniform2fv(uCenter, g.uCenter)
+
+	uScale := g.w.GetUniformLocation(g.shader, "uScale")
+	g.w.Uniform2fv(uScale, g.uScale)
 
 	g.w.BindBuffer(g.w.ARRAY_BUFFER, g.coordsBuffer)
 	g.w.BufferSubDataF32(g.w.ARRAY_BUFFER, 0, g.coords[:g.written])
@@ -259,4 +271,19 @@ func (g *graphics) Sprite(s *Sprite, centerx, centery, rotation float32) {
 func (g *graphics) Clear() {
 	g.w.ClearColor(0.039, 0.102, 0.247, 1)
 	g.w.Clear(g.w.COLOR_BUFFER_BIT)
+}
+
+func (g *graphics) SetCamera(xmin, ymin, xmax, ymax float32) {
+	g.uCenter[0] = (xmin + xmax) / 2
+	g.uCenter[1] = (ymin + ymax) / 2
+	g.uScale[0] = (xmax - xmin) / 2
+	g.uScale[1] = (ymax - ymin) / 2
+
+	aspectRatio := float32(g.width) / float32(g.height)
+
+	if g.uScale[0]/aspectRatio > g.uScale[1] {
+		g.uScale[1] = g.uScale[0] / aspectRatio
+	} else {
+		g.uScale[0] = g.uScale[1] * aspectRatio
+	}
 }

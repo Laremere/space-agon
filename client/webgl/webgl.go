@@ -261,8 +261,8 @@ func (w *WebGL) Uniform1i(u UniformLocation, v int) {
 	w.gl.Call("uniform1i", js.Value(u), v)
 }
 
-func (w *WebGL) Uniform2fv(u UniformLocation, v [2]float64) {
-	w.gl.Call("uniform2fv", js.Value(u), copyFloat64SliceToJS(v[:]))
+func (w *WebGL) Uniform2fv(u UniformLocation, v [2]float32) {
+	w.gl.Call("uniform2fv", js.Value(u), copyFloat32SliceToJS(v[:]))
 }
 
 func (w *WebGL) Uniform4fv(u UniformLocation, v [4]float64) {

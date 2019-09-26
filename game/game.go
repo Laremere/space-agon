@@ -88,7 +88,6 @@ func (g *Game) Step(input *Input) {
 		i.Require(RotKey)
 		i.Require(SpriteKey)
 		i.Require(PlayerControlledShipKey)
-		i.Require(TimedDestroyKey)
 		i.Require(KeepInCameraKey)
 		i.New()
 
@@ -97,9 +96,8 @@ func (g *Game) Step(input *Input) {
 		(*pos)[1] = 0
 		*i.Sprite() = SpriteShip
 		*i.Rot() = 0
-		*i.TimedDestroy() = 50
 
-		// g.initialized = true
+		g.initialized = true
 	}
 
 	{
@@ -119,8 +117,8 @@ func (g *Game) Step(input *Input) {
 		i.Require(RotKey)
 		i.Require(PlayerControlledShipKey)
 		for i.Next() {
-			const rotationSpeed = 1
-			const forwardSpeed = 1
+			const rotationSpeed = 3
+			const forwardSpeed = 10
 
 			if input.Left.Hold {
 				*i.Rot() += rotationSpeed * input.Dt
