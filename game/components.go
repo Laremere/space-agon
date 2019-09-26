@@ -78,6 +78,9 @@ const (
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
 	PlayerControlledShipKey
+	KeepInCameraKey
+
+	doNotMoveOrUseLastKeyForNumberOfKeys
 )
 
 type EntityBag struct {
@@ -244,7 +247,7 @@ func (iter *Iter) Remove() {
 }
 
 type CompKey uint16
-type compsKey [1]uint8
+type compsKey [doNotMoveOrUseLastKeyForNumberOfKeys/compsKeyUnitSize + 1]uint8
 
 const compsKeyUnitSize = 8
 

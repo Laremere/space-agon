@@ -19,6 +19,7 @@ package webgl
 import (
 	"errors"
 	"fmt"
+	"math"
 	"syscall/js"
 )
 
@@ -343,12 +344,52 @@ func copyFloat64SliceToJS(a []float64) js.Value {
 	return r
 }
 
-func copyFloat32SliceToJS(a []float32) js.Value {
-	r := js.Global().Get("Float32Array").New(len(a))
-	for i, v := range a {
-		r.SetIndex(i, js.ValueOf(v))
+func init() {
+	if copyFloat32SliceToJS([]float32{5}).Index(0).Float() == 5 {
+		return
 	}
-	return r
+	swapEndianess = true
+	if copyFloat32SliceToJS([]float32{5}).Index(0).Float() == 5 {
+		return
+	}
+	panic("Could not determine endianess.")
+}
+
+var swapEndianess bool = false
+
+func copyFloat32SliceToJS(a []float32) js.Value {
+	// TODO: This is much faster, but could it be even better?  Would it be
+	// possible to not do any adding to a buffer on the Go side, but from js copy
+	// the float memory segment directly? (and then do any endian swapping.)
+	const bytesPerValue = 4
+	backingBuffer := js.Global().Get("ArrayBuffer").New(len(a) * bytesPerValue)
+	// TODO: Pool a large buffer, do in chunks if not large enough?
+	b := make([]byte, len(a)*bytesPerValue)
+	bi := 0
+	for _, v := range a {
+		vb := math.Float32bits(v)
+		if swapEndianess {
+			b[bi] = byte(vb)
+			bi++
+			b[bi] = byte(vb >> 8)
+			bi++
+			b[bi] = byte(vb >> 16)
+			bi++
+			b[bi] = byte(vb >> 24)
+			bi++
+		} else {
+			b[bi] = byte(vb >> 24)
+			bi++
+			b[bi] = byte(vb >> 16)
+			bi++
+			b[bi] = byte(vb >> 8)
+			bi++
+			b[bi] = byte(vb)
+			bi++
+		}
+	}
+	js.CopyBytesToJS(js.Global().Get("Uint8Array").New(backingBuffer), b)
+	return js.Global().Get("Float32Array").New(backingBuffer)
 }
 
 func copyInt16SliceToJS(a []int16) js.Value {

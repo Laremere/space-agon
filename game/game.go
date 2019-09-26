@@ -89,6 +89,7 @@ func (g *Game) Step(input *Input) {
 		i.Require(SpriteKey)
 		i.Require(PlayerControlledShipKey)
 		i.Require(TimedDestroyKey)
+		i.Require(KeepInCameraKey)
 		i.New()
 
 		pos := i.Pos()
@@ -96,7 +97,7 @@ func (g *Game) Step(input *Input) {
 		(*pos)[1] = 0
 		*i.Sprite() = SpriteShip
 		*i.Rot() = 0
-		*i.TimedDestroy() = 5
+		*i.TimedDestroy() = 50
 
 		// g.initialized = true
 	}
