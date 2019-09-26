@@ -38,6 +38,40 @@ func main() {
 }
 
 func newClient() (*client, error) {
+	inp := &game.Input{}
+	js.Global().Get("document").Call("addEventListener", "keydown", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		// log.Println("keydown", args[0].Get("code").String())
+		switch args[0].Get("code").String() {
+		case "ArrowUp":
+			inp.Up.Down()
+		case "ArrowLeft":
+			inp.Left.Down()
+		case "ArrowRight":
+			inp.Right.Down()
+		case "ArrowDown":
+			inp.Down.Down()
+		case "Space":
+			inp.Fire.Down()
+		}
+		return nil
+	}))
+	js.Global().Get("document").Call("addEventListener", "keyup", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		// log.Println("keyup", args[0].Get("code").String())
+		switch args[0].Get("code").String() {
+		case "ArrowUp":
+			inp.Up.Up()
+		case "ArrowLeft":
+			inp.Left.Up()
+		case "ArrowRight":
+			inp.Right.Up()
+		case "ArrowDown":
+			inp.Down.Up()
+		case "Space":
+			inp.Fire.Up()
+		}
+		return nil
+	}))
+
 	log.Println("Initiating Graphics.")
 	gr, err := NewGraphics()
 	if err != nil {
@@ -45,20 +79,25 @@ func newClient() (*client, error) {
 	}
 
 	return &client{
-		gr:  gr,
-		g:   game.NewGame(),
-		inp: &game.Input{},
+		gr:            gr,
+		g:             game.NewGame(),
+		inp:           inp,
+		lastTimestamp: js.Global().Get("performance").Call("now").Float(),
 	}, nil
 }
 
 type client struct {
-	gr  *graphics
-	g   *game.Game
-	inp *game.Input
+	gr            *graphics
+	g             *game.Game
+	inp           *game.Input
+	lastTimestamp float64
 }
 
 func (c *client) scheduleFrame() {
 	js.Global().Get("window").Call("requestAnimationFrame", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		now := args[0].Float()
+		c.inp.Dt = float32((now - c.lastTimestamp) / 1000)
+		c.lastTimestamp = now
 		c.frame()
 		return nil
 	}))
@@ -68,8 +107,8 @@ var rotation = float32(0)
 
 func (c *client) frame() {
 
-	c.inp.Up.Hold = true
-	c.inp.Left.Hold = true
+	// c.inp.Up.Hold = true
+	// c.inp.Left.Hold = true
 
 	c.g.Step(c.inp)
 
@@ -98,9 +137,13 @@ func (c *client) frame() {
 
 	c.gr.Flush()
 
+	c.g.FrameEnd()
+	c.inp.FrameEndReset()
+
 	c.scheduleFrame()
 }
 
+// TODO: Just make this a map from game's sprite to values.
 var spritemap = map[game.Sprite]*Sprite{
 	game.SpriteShip: Spaceship,
 }

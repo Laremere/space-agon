@@ -76,6 +76,7 @@ const (
 
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
+	PlayerControlledShipKey
 )
 
 type EntityBag struct {

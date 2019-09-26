@@ -14,6 +14,8 @@
 
 package game
 
+import "math"
+
 type Sprite uint16
 
 const (
@@ -41,6 +43,25 @@ type Keystate struct {
 	Release bool
 }
 
+func (k *Keystate) FrameEndReset() {
+	k.Press = false
+	k.Release = false
+}
+
+func (k *Keystate) Down() {
+	if !k.Hold {
+		k.Press = true
+		k.Hold = true
+	}
+}
+
+func (k *Keystate) Up() {
+	if k.Hold {
+		k.Release = true
+		k.Hold = false
+	}
+}
+
 type Input struct {
 	Up    Keystate
 	Down  Keystate
@@ -50,12 +71,21 @@ type Input struct {
 	Dt    float32
 }
 
+func (inp *Input) FrameEndReset() {
+	inp.Up.FrameEndReset()
+	inp.Down.FrameEndReset()
+	inp.Left.FrameEndReset()
+	inp.Right.FrameEndReset()
+	inp.Fire.FrameEndReset()
+}
+
 func (g *Game) Step(input *Input) {
 	if !g.initialized {
 		i := NewIter(g.E)
 		i.Require(PosKey)
 		i.Require(RotKey)
 		i.Require(SpriteKey)
+		i.Require(PlayerControlledShipKey)
 		i.New()
 
 		pos := i.Pos()
@@ -66,6 +96,33 @@ func (g *Game) Step(input *Input) {
 
 		g.initialized = true
 	}
+
+	{
+		i := NewIter(g.E)
+		i.Require(PosKey)
+		i.Require(RotKey)
+		i.Require(PlayerControlledShipKey)
+		for i.Next() {
+			const rotationSpeed = 1
+			const forwardSpeed = 1
+
+			if input.Left.Hold {
+				*i.Rot() += rotationSpeed * input.Dt
+			}
+			if input.Right.Hold {
+				*i.Rot() -= rotationSpeed * input.Dt
+			}
+
+			if input.Up.Hold {
+				dx := float32(math.Cos(float64(*i.Rot()))) * forwardSpeed * input.Dt
+				dy := float32(math.Sin(float64(*i.Rot()))) * forwardSpeed * input.Dt
+
+				(*i.Pos())[0] += dx
+				(*i.Pos())[1] += dy
+			}
+		}
+	}
+
 }
 
 func (g *Game) FrameEnd() {
