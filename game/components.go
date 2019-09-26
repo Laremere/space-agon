@@ -163,7 +163,7 @@ func (iter *Iter) TimedDestroy() *float32 {
 ////////////////////////////////////////////////////////////////////////////////
 
 func inRequirement(compsKey *compsKey, compKey CompKey) bool {
-	return 0 < (*compsKey)[compKey/compsKeyUnitSize]&1<<(compKey%compsKeyUnitSize)
+	return 0 < (*compsKey)[compKey/compsKeyUnitSize]&(1<<(compKey%compsKeyUnitSize))
 }
 
 func (e *EntityBag) Add() int {
@@ -187,14 +187,6 @@ type Iter struct {
 	i            int
 	j            int
 	requirements compsKey
-}
-
-func NewIter(e *Entities) *Iter {
-	return &Iter{
-		e: e,
-		i: -1,
-		j: -1,
-	}
 }
 
 func (iter *Iter) Require(k CompKey) {
@@ -259,6 +251,14 @@ type Entities struct {
 func newEntities() *Entities {
 	return &Entities{
 		bagsByKey: make(map[compsKey]int),
+	}
+}
+
+func (e *Entities) NewIter() *Iter {
+	return &Iter{
+		e: e,
+		i: -1,
+		j: -1,
 	}
 }
 

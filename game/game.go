@@ -83,7 +83,7 @@ func (inp *Input) FrameEndReset() {
 
 func (g *Game) Step(input *Input) {
 	if !g.initialized {
-		i := NewIter(g.E)
+		i := g.E.NewIter()
 		i.Require(PosKey)
 		i.Require(RotKey)
 		i.Require(SpriteKey)
@@ -103,7 +103,7 @@ func (g *Game) Step(input *Input) {
 	}
 
 	{
-		i := NewIter(g.E)
+		i := g.E.NewIter()
 		i.Require(TimedDestroyKey)
 		for i.Next() {
 			*i.TimedDestroy() -= input.Dt
@@ -114,7 +114,7 @@ func (g *Game) Step(input *Input) {
 	}
 
 	{
-		i := NewIter(g.E)
+		i := g.E.NewIter()
 		i.Require(PosKey)
 		i.Require(RotKey)
 		i.Require(PlayerControlledShipKey)
@@ -143,7 +143,7 @@ func (g *Game) Step(input *Input) {
 
 func (g *Game) FrameEnd() {
 	{
-		i := NewIter(g.E)
+		i := g.E.NewIter()
 		i.Require(FrameEndDeleteKey)
 		for i.Next() {
 			i.Remove()

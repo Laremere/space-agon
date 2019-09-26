@@ -106,27 +106,23 @@ func (c *client) scheduleFrame() {
 var rotation = float32(0)
 
 func (c *client) frame() {
-
-	// c.inp.Up.Hold = true
-	// c.inp.Left.Hold = true
-
 	c.g.Step(c.inp)
 
-	// rotation += 0.01
 	c.gr.Clear()
-	// c.gr.Sprite(Spaceship, 0.1, 0.2, rotation)
 
-	// for _, bag := range c.g.E.Bags {
-	// 	_ = bag
-	// }
-
-	count := 0
 	{
-		i := game.NewIter(c.g.E)
+		i := c.g.E.NewIter()
+		i.Require(game.PosKey)
+		i.Require(game.KeepInCameraKey)
+	}
+
+	// count := 0
+	{
+		i := c.g.E.NewIter()
 		i.Require(game.PosKey)
 		i.Require(game.SpriteKey)
 		for i.Next() {
-			count++
+			// count++
 			p := *i.Pos()
 			rot := i.Rot()
 			rotation := float32(0)
