@@ -14,7 +14,9 @@
 
 package game
 
-import "math"
+import (
+	"math"
+)
 
 type Sprite uint16
 
@@ -86,15 +88,28 @@ func (g *Game) Step(input *Input) {
 		i.Require(RotKey)
 		i.Require(SpriteKey)
 		i.Require(PlayerControlledShipKey)
+		i.Require(TimedDestroyKey)
 		i.New()
 
 		pos := i.Pos()
-		(*pos)[0] = 0.3
-		(*pos)[1] = 0.7
+		(*pos)[0] = 0
+		(*pos)[1] = 0
 		*i.Sprite() = SpriteShip
-		*i.Rot() = 1
+		*i.Rot() = 0
+		*i.TimedDestroy() = 5
 
-		g.initialized = true
+		// g.initialized = true
+	}
+
+	{
+		i := NewIter(g.E)
+		i.Require(TimedDestroyKey)
+		for i.Next() {
+			*i.TimedDestroy() -= input.Dt
+			if *i.TimedDestroy() <= 0 {
+				i.Remove()
+			}
+		}
 	}
 
 	{

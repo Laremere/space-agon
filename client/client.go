@@ -120,11 +120,13 @@ func (c *client) frame() {
 	// 	_ = bag
 	// }
 
+	count := 0
 	{
 		i := game.NewIter(c.g.E)
 		i.Require(game.PosKey)
 		i.Require(game.SpriteKey)
 		for i.Next() {
+			count++
 			p := *i.Pos()
 			rot := i.Rot()
 			rotation := float32(0)

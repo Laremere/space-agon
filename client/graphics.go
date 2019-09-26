@@ -222,7 +222,7 @@ func (g *graphics) Sprite(s *Sprite, centerx, centery, rotation float32) {
 		textureCoords[i] = s.textureCoords[i]
 	}
 
-	g.written = 12
+	g.written += 12
 
 	// xMin := 10
 	// width := 10

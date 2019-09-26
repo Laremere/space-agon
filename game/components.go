@@ -73,6 +73,7 @@ const (
 	PosKey = CompKey(iota)
 	SpriteKey
 	RotKey
+	TimedDestroyKey
 
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
@@ -84,9 +85,10 @@ type EntityBag struct {
 	comps    []Comp
 	compsKey compsKey
 
-	Pos    *Vec2Comp
-	Sprite *SpriteComp
-	Rot    *FloatComp
+	Pos          *Vec2Comp
+	Sprite       *SpriteComp
+	Rot          *FloatComp
+	TimedDestroy *FloatComp
 }
 
 func newEntityBag(compsKey *compsKey) *EntityBag {
@@ -111,6 +113,11 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 		bag.comps = append(bag.comps, bag.Rot)
 	}
 
+	if inRequirement(compsKey, TimedDestroyKey) {
+		bag.TimedDestroy = &FloatComp{}
+		bag.comps = append(bag.comps, bag.TimedDestroy)
+	}
+
 	return bag
 }
 
@@ -132,6 +139,14 @@ func (iter *Iter) Sprite() *Sprite {
 
 func (iter *Iter) Rot() *float32 {
 	comp := iter.e.bags[iter.i].Rot
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) TimedDestroy() *float32 {
+	comp := iter.e.bags[iter.i].TimedDestroy
 	if comp == nil {
 		return nil
 	}
