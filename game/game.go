@@ -14,26 +14,66 @@
 
 package game
 
-type Pos struct {
-	x float32
-	y float32
+type Sprite uint16
+
+const (
+	SpriteUnset = Sprite(iota)
+	SpriteShip
+	SpirteMissile
+)
+
+type Game struct {
+	E           *Entities
+	initialized bool
 }
 
-type PosComp []Pos
+func NewGame() *Game {
+	g := &Game{
+		E: newEntities(),
+	}
 
-func (c *PosComp) Swap(i, j int) {
-	c[i], c[j] = c[j], c[i]
+	return g
 }
 
-func (c *PosComp) Append() {
-	c = append(c, Pos{})
+type Keystate struct {
+	Press   bool
+	Hold    bool
+	Release bool
 }
 
-func (c *PosComp) Reduce() {
-	c = c[:len(c)-1]
+type Input struct {
+	Up    Keystate
+	Down  Keystate
+	Left  Keystate
+	Right Keystate
+	Fire  Keystate
+	Dt    float32
 }
 
-// type EntityBag struct {
-// 	count int
-// 	comps []Comp
-// }
+func (g *Game) Step(input *Input) {
+	if !g.initialized {
+		i := NewIter(g.E)
+		i.Require(PosKey)
+		i.Require(RotKey)
+		i.Require(SpriteKey)
+		i.New()
+
+		pos := i.Pos()
+		(*pos)[0] = 0.3
+		(*pos)[1] = 0.7
+		*i.Sprite() = SpriteShip
+		*i.Rot() = 1
+
+		g.initialized = true
+	}
+}
+
+func (g *Game) FrameEnd() {
+	{
+		i := NewIter(g.E)
+		i.Require(FrameEndDeleteKey)
+		for i.Next() {
+			i.Remove()
+		}
+	}
+}

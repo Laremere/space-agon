@@ -19,13 +19,15 @@ package main
 import (
 	"log"
 	"syscall/js"
+
+	"github.com/googleforgames/space-agon/game"
 )
 
 func main() {
 	js.Global().Call("whenLoaded", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		g, err := newGame()
+		c, err := newClient()
 		if err == nil {
-			g.scheduleFrame()
+			c.scheduleFrame()
 		} else {
 			js.Global().Get("document").Get("body").Set("innerHTML", js.ValueOf(err.Error()))
 		}
@@ -35,36 +37,70 @@ func main() {
 	<-make(chan struct{})
 }
 
-func newGame() (*game, error) {
+func newClient() (*client, error) {
 	log.Println("Initiating Graphics.")
 	gr, err := NewGraphics()
 	if err != nil {
 		return nil, err
 	}
 
-	return &game{
-		gr: gr,
+	return &client{
+		gr:  gr,
+		g:   game.NewGame(),
+		inp: &game.Input{},
 	}, nil
 }
 
-type game struct {
-	gr *graphics
+type client struct {
+	gr  *graphics
+	g   *game.Game
+	inp *game.Input
 }
 
-func (g *game) scheduleFrame() {
+func (c *client) scheduleFrame() {
 	js.Global().Get("window").Call("requestAnimationFrame", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		g.frame()
+		c.frame()
 		return nil
 	}))
 }
 
 var rotation = float32(0)
 
-func (g *game) frame() {
-	rotation += 0.01
-	g.gr.Clear()
-	g.gr.Sprite(Spaceship, 0.1, 0.2, rotation)
-	g.gr.Flush()
+func (c *client) frame() {
 
-	g.scheduleFrame()
+	c.inp.Up.Hold = true
+	c.inp.Left.Hold = true
+
+	c.g.Step(c.inp)
+
+	// rotation += 0.01
+	c.gr.Clear()
+	// c.gr.Sprite(Spaceship, 0.1, 0.2, rotation)
+
+	// for _, bag := range c.g.E.Bags {
+	// 	_ = bag
+	// }
+
+	{
+		i := game.NewIter(c.g.E)
+		i.Require(game.PosKey)
+		i.Require(game.SpriteKey)
+		for i.Next() {
+			p := *i.Pos()
+			rot := i.Rot()
+			rotation := float32(0)
+			if rot != nil {
+				rotation = *rot
+			}
+			c.gr.Sprite(spritemap[*i.Sprite()], p[0], p[1], rotation)
+		}
+	}
+
+	c.gr.Flush()
+
+	c.scheduleFrame()
+}
+
+var spritemap = map[game.Sprite]*Sprite{
+	game.SpriteShip: Spaceship,
 }
