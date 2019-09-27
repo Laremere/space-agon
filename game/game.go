@@ -130,7 +130,7 @@ func (g *Game) Step(input *Input) {
 
 		rad := rand.Float32() * 2 * math.Pi
 		*i.Pos() = Vec2FromRadians(rad)
-		rad += rand.Float32() - 0.5
+		rad += rand.Float32()*2 - 1
 		*i.Momentum() = Vec2FromRadians(rad).Scale(rand.Float32()*5 + 1)
 		*i.TimedDestroy() = rand.Float32()*2 + 1
 	}

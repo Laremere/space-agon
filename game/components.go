@@ -52,6 +52,20 @@ func (v *Vec2) AddEqual(o Vec2) {
 	(*v)[1] += o[1]
 }
 
+type Lookup [2]int
+
+func (l *Lookup) Alive() bool {
+	return (*l)[0] >= 0
+}
+
+type ShipControl struct {
+	Forward bool
+	Back    bool
+	Left    bool
+	Right   bool
+	Fire    bool
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -60,11 +74,11 @@ func (v *Vec2) AddEqual(o Vec2) {
 
 type Vec2Comp []Vec2
 
-func (c *Vec2Comp) Swap(i, j int) {
-	(*c)[i], (*c)[j] = (*c)[j], (*c)[i]
+func (c *Vec2Comp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
 }
 
-func (c *Vec2Comp) Extend() {
+func (c *Vec2Comp) Extend(i int) {
 	*c = append(*c, Vec2{})
 }
 
@@ -74,11 +88,11 @@ func (c *Vec2Comp) RemoveLast() {
 
 type SpriteComp []Sprite
 
-func (c *SpriteComp) Swap(i, j int) {
-	(*c)[i], (*c)[j] = (*c)[j], (*c)[i]
+func (c *SpriteComp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
 }
 
-func (c *SpriteComp) Extend() {
+func (c *SpriteComp) Extend(i int) {
 	*c = append(*c, SpriteUnset)
 }
 
@@ -88,16 +102,36 @@ func (c *SpriteComp) RemoveLast() {
 
 type FloatComp []float32
 
-func (c *FloatComp) Swap(i, j int) {
-	(*c)[i], (*c)[j] = (*c)[j], (*c)[i]
+func (c *FloatComp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
 }
 
-func (c *FloatComp) Extend() {
+func (c *FloatComp) Extend(i int) {
 	*c = append(*c, 0)
 }
 
 func (c *FloatComp) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
+}
+
+type LookupComp []*Lookup
+
+func (c *LookupComp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+	(*c)[j1][1] = j1
+	(*c)[j2][1] = j2
+}
+
+func (c *LookupComp) Extend(i int) {
+	j := len(*c)
+	*c = append(*c, &Lookup{i, j})
+}
+
+func (c *LookupComp) RemoveLast() {
+	j := len(*c) - 1
+	(*c)[j][0] = -2
+	(*c)[j][1] = -3
+	*c = (*c)[:j]
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -234,13 +268,13 @@ func inRequirement(compsKey *compsKey, compKey CompKey) bool {
 	return 0 < (*compsKey)[compKey/compsKeyUnitSize]&(1<<(compKey%compsKeyUnitSize))
 }
 
-func (e *EntityBag) Add() int {
-	i := e.count
+func (e *EntityBag) Add(i int) int {
+	j := e.count
 	e.count++
 	for _, c := range e.comps {
-		c.Extend()
+		c.Extend(i)
 	}
-	return i
+	return j
 }
 
 func (e *EntityBag) Remove(i int) {
@@ -296,7 +330,12 @@ func (iter *Iter) New() {
 		iter.e.bags = append(iter.e.bags, newEntityBag(&iter.requirements))
 	}
 
-	iter.j = iter.e.bags[iter.i].Add()
+	iter.j = iter.e.bags[iter.i].Add(iter.i)
+}
+
+func (iter *Iter) Lookup(indices Lookup) {
+	iter.i = indices[0]
+	iter.j = indices[1]
 }
 
 func (iter *Iter) Remove() {
@@ -331,7 +370,7 @@ func (e *Entities) NewIter() *Iter {
 }
 
 type Comp interface {
-	Swap(i, j int)
-	Extend()
+	Swap(j1, j2 int)
+	Extend(i int)
 	RemoveLast()
 }
