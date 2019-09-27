@@ -55,15 +55,15 @@ func (v *Vec2) AddEqual(o Vec2) {
 type Lookup [2]int
 
 func (l *Lookup) Alive() bool {
-	return (*l)[0] >= 0
+	return l != nil && (*l)[0] >= 0
 }
 
 type ShipControl struct {
-	Forward bool
-	Back    bool
-	Left    bool
-	Right   bool
-	Fire    bool
+	Up    bool
+	Down  bool
+	Left  bool
+	Right bool
+	Fire  bool
 }
 
 // TODO NEXT: Make this into a component, remember the ship being controlled.
@@ -137,6 +137,20 @@ func (c *LookupComp) RemoveLast() {
 	*c = (*c)[:j]
 }
 
+type ShipControlComp []ShipControl
+
+func (c *ShipControlComp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *ShipControlComp) Extend(i int) {
+	*c = append(*c, ShipControl{})
+}
+
+func (c *ShipControlComp) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -151,10 +165,11 @@ const (
 	TimedDestroyKey
 	MomentumKey
 	SpinKey
+	LookupKey
+	ShipControlKey
 
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
-	PlayerControlledShipKey
 	KeepInCameraKey
 
 	doNotMoveOrUseLastKeyForNumberOfKeys
@@ -171,6 +186,8 @@ type EntityBag struct {
 	TimedDestroy *FloatComp
 	Momentum     *Vec2Comp
 	Spin         *FloatComp
+	Lookup       *LookupComp
+	ShipControl  *ShipControlComp
 }
 
 func newEntityBag(compsKey *compsKey) *EntityBag {
@@ -208,6 +225,15 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 	if inRequirement(compsKey, SpinKey) {
 		bag.Spin = &FloatComp{}
 		bag.comps = append(bag.comps, bag.Spin)
+	}
+	if inRequirement(compsKey, LookupKey) {
+		bag.Lookup = &LookupComp{}
+		bag.comps = append(bag.comps, bag.Lookup)
+	}
+
+	if inRequirement(compsKey, ShipControlKey) {
+		bag.ShipControl = &ShipControlComp{}
+		bag.comps = append(bag.comps, bag.ShipControl)
 	}
 
 	return bag
@@ -255,6 +281,22 @@ func (iter *Iter) Momentum() *Vec2 {
 
 func (iter *Iter) Spin() *float32 {
 	comp := iter.e.bags[iter.i].Spin
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) Lookup() *Lookup {
+	comp := iter.e.bags[iter.i].Lookup
+	if comp == nil {
+		return nil
+	}
+	return (*comp)[iter.j]
+}
+
+func (iter *Iter) ShipControl() *ShipControl {
+	comp := iter.e.bags[iter.i].ShipControl
 	if comp == nil {
 		return nil
 	}
@@ -336,9 +378,9 @@ func (iter *Iter) New() {
 	iter.j = iter.e.bags[iter.i].Add(iter.i)
 }
 
-func (iter *Iter) Lookup(indices Lookup) {
-	iter.i = indices[0]
-	iter.j = indices[1]
+func (iter *Iter) Get(indices *Lookup) {
+	iter.i = (*indices)[0]
+	iter.j = (*indices)[1]
 }
 
 func (iter *Iter) Remove() {

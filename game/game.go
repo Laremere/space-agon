@@ -20,8 +20,9 @@ import (
 )
 
 type Game struct {
-	E           *Entities
-	initialized bool
+	E              *Entities
+	initialized    bool
+	ControlledShip *Lookup
 }
 
 func NewGame() *Game {
@@ -76,23 +77,38 @@ func (inp *Input) FrameEndReset() {
 }
 
 func (g *Game) Step(input *Input) {
+	if g.ControlledShip.Alive() {
+		i := g.E.NewIter()
+		i.Get(g.ControlledShip)
+
+		shipControl := i.ShipControl()
+		shipControl.Up = input.Up.Hold
+		shipControl.Down = input.Down.Hold
+		shipControl.Left = input.Left.Hold
+		shipControl.Right = input.Right.Hold
+		shipControl.Fire = input.Fire.Hold
+	}
+
 	if !g.initialized {
 		{ // Spawn Spaceship
 			i := g.E.NewIter()
 			i.Require(PosKey)
 			i.Require(RotKey)
 			i.Require(SpriteKey)
-			i.Require(PlayerControlledShipKey)
 			i.Require(KeepInCameraKey)
 			i.Require(SpinKey)
 			i.Require(MomentumKey)
+			i.Require(ShipControlKey)
+			i.Require(LookupKey)
 			i.New()
 
 			pos := i.Pos()
-			(*pos)[0] = 0
+			(*pos)[0] = 5
 			(*pos)[1] = 0
 			*i.Sprite() = SpriteShip
 			*i.Rot() = 0
+
+			g.ControlledShip = i.Lookup()
 		}
 
 		{ // spawn stars
@@ -150,7 +166,7 @@ func (g *Game) Step(input *Input) {
 		i := g.E.NewIter()
 		i.Require(PosKey)
 		i.Require(RotKey)
-		i.Require(PlayerControlledShipKey)
+		i.Require(ShipControlKey)
 		i.Require(SpinKey)
 		i.Require(MomentumKey)
 		for i.Next() {
@@ -159,13 +175,13 @@ func (g *Game) Step(input *Input) {
 			const forwardSpeed = 2
 
 			spinDesire := float32(0)
-			if input.Left.Hold {
+			if i.ShipControl().Left {
 				spinDesire++
 			}
-			if input.Right.Hold {
+			if i.ShipControl().Right {
 				spinDesire--
 			}
-			if !input.Left.Hold && !input.Right.Hold {
+			if !i.ShipControl().Left && !i.ShipControl().Right {
 				if *i.Spin() < 0 {
 					spinDesire += 0.1
 				} else {
@@ -182,7 +198,7 @@ func (g *Game) Step(input *Input) {
 
 			*i.Spin() += spinDesire * input.Dt
 
-			if input.Up.Hold {
+			if i.ShipControl().Up {
 				dx := float32(math.Cos(float64(*i.Rot()))) * forwardSpeed * input.Dt
 				dy := float32(math.Sin(float64(*i.Rot()))) * forwardSpeed * input.Dt
 
