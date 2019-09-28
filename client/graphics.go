@@ -221,7 +221,7 @@ var spritemap = map[game.Sprite]*Sprite{
 		size:          10,
 	},
 	game.SpriteMissile: &Sprite{
-		textureCoords: genTexCoords(512, 0, 2024, 512),
+		textureCoords: genTexCoords(512, 0, 1024, 512),
 		size:          1,
 	},
 }
