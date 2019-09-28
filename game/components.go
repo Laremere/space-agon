@@ -44,7 +44,7 @@ func (v Vec2) Scale(s float32) Vec2 {
 }
 
 func (v Vec2) Add(o Vec2) Vec2 {
-	return Vec2{v[0] + o[0], v[1] * o[1]}
+	return Vec2{v[0] + o[0], v[1] + o[1]}
 }
 
 func (v *Vec2) AddEqual(o Vec2) {
@@ -65,11 +65,12 @@ func (l *Lookup) Alive() bool {
 }
 
 type ShipControl struct {
-	Up    bool
-	Down  bool
-	Left  bool
-	Right bool
-	Fire  bool
+	Up           bool
+	Down         bool
+	Left         bool
+	Right        bool
+	Fire         bool
+	FireCoolDown float32
 }
 
 type PlayerConnectedEvent struct {

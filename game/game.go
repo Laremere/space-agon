@@ -15,6 +15,7 @@
 package game
 
 import (
+	"log"
 	"math"
 	"math/rand"
 )
@@ -104,7 +105,7 @@ func (g *Game) Step(input *Input) {
 			i.New()
 
 			pos := i.Pos()
-			(*pos)[0] = 5
+			(*pos)[0] = 20
 			(*pos)[1] = 0
 			(*i.Momentum())[1] = 5
 			*i.Sprite() = SpriteShip
@@ -182,6 +183,9 @@ func (g *Game) Step(input *Input) {
 		i.Require(SpinKey)
 		i.Require(MomentumKey)
 		for i.Next() {
+			///////////////////////////
+			// Ship Movement Controls
+			///////////////////////////
 			const rotationForSpeed = 5
 			const rotationAgainstSpeed = 10
 			const forwardSpeed = 2
@@ -216,6 +220,36 @@ func (g *Game) Step(input *Input) {
 
 				(*i.Momentum())[0] += dx
 				(*i.Momentum())[1] += dy
+			}
+
+			///////////////////////////
+			// Ship Weapons
+			///////////////////////////
+			i.ShipControl().FireCoolDown -= input.Dt
+
+			if i.ShipControl().FireCoolDown <= 0 && i.ShipControl().Fire {
+				i.ShipControl().FireCoolDown = 0.5
+				// i.ShipControl().FireCoolDown = 5
+
+				im := g.E.NewIter()
+				im.Require(PosKey)
+				im.Require(RotKey)
+				im.Require(SpinKey)
+				im.Require(MomentumKey)
+				im.Require(SpriteKey)
+				im.Require(AffectedByGravityKey)
+				im.Require(TimedDestroyKey)
+				im.New()
+
+				*im.Sprite() = SpriteMissile
+				*im.TimedDestroy() = 10
+				*im.Pos() = *i.Pos()
+				*im.Rot() = *i.Rot()
+				*im.Spin() = *i.Spin()
+				const MissileSpeed = 10
+				log.Println(*i.Rot() / math.Pi * 180)
+				*im.Momentum() = *i.Momentum()
+				im.Momentum().AddEqual(Vec2FromRadians(*i.Rot()).Scale(MissileSpeed))
 			}
 		}
 	}

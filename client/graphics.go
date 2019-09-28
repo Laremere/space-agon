@@ -220,9 +220,9 @@ var spritemap = map[game.Sprite]*Sprite{
 		textureCoords: genTexCoords(0, 512, 512, 1024),
 		size:          10,
 	},
-	game.SpriteStarBit: &Sprite{
-		textureCoords: genTexCoords(0, 512, 512, 1024),
-		size:          0.1,
+	game.SpriteMissile: &Sprite{
+		textureCoords: genTexCoords(512, 0, 2024, 512),
+		size:          1,
 	},
 }
 
