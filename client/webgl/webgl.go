@@ -70,6 +70,7 @@ type WebGL struct {
 	LINK_STATUS     ProgramParameterBool
 	COMPILE_STATUS  ShaderParameterBool
 
+	POINTS    DrawMode
 	TRIANGLES DrawMode
 
 	UNSIGNED_BYTE GlType
@@ -112,6 +113,7 @@ func InitWebgl(canvas js.Value) (*WebGL, error) {
 	w.LINK_STATUS = ProgramParameterBool(w.gl.Get("LINK_STATUS"))
 	w.COMPILE_STATUS = ShaderParameterBool(w.gl.Get("COMPILE_STATUS"))
 
+	w.POINTS = DrawMode(w.gl.Get("POINTS"))
 	w.TRIANGLES = DrawMode(w.gl.Get("TRIANGLES"))
 
 	w.FLOAT = GlType(w.gl.Get("FLOAT"))

@@ -108,10 +108,16 @@ func (c *client) scheduleFrame() {
 var rotation = float32(0)
 
 func (c *client) frame() {
+	const maximumStep = float32(1) / 20
+	for c.inp.Dt > maximumStep {
+		actualDt := c.inp.Dt
+		c.inp.Dt = maximumStep
+		c.g.Step(c.inp)
+		c.inp.Dt = actualDt - maximumStep
+	}
 	c.g.Step(c.inp)
 
 	c.gr.Clear()
-
 	{
 		i := c.g.E.NewIter()
 		i.Require(game.PosKey)
@@ -149,6 +155,16 @@ func (c *client) frame() {
 		c.gr.SetCamera(xMin, yMin, xMax, yMax)
 	}
 
+	{
+		i := c.g.E.NewIter()
+		i.Require(game.PosKey)
+		i.Require(game.PointRenderKey)
+		for i.Next() {
+			p := *i.Pos()
+			c.gr.Point(p[0], p[1])
+		}
+	}
+
 	// count := 0
 	{
 		i := c.g.E.NewIter()
@@ -168,7 +184,6 @@ func (c *client) frame() {
 
 	c.gr.Flush()
 
-	c.g.FrameEnd()
 	c.inp.FrameEndReset()
 
 	c.scheduleFrame()

@@ -32,8 +32,8 @@ type graphics struct {
 	width  int
 	height int
 
-	spritesheet *webgl.Texture
-	shader      *webgl.Program
+	spritesheet  *webgl.Texture
+	spriteShader *webgl.Program
 
 	coords              []float32
 	coordsBuffer        *webgl.Buffer
@@ -44,6 +44,10 @@ type graphics struct {
 	uScale  [2]float32
 
 	written int
+
+	pointShader   *webgl.Program
+	pointCoords   []float32
+	pointsWritten int
 }
 
 func NewGraphics() (*graphics, error) {
@@ -68,7 +72,7 @@ func NewGraphics() (*graphics, error) {
 	g.width = canvas.Get("width").Int()
 	g.height = canvas.Get("height").Int()
 
-	g.shader, err = webgl.CreateProgram(
+	g.spriteShader, err = webgl.CreateProgram(
 		g.w,
 		`
     uniform vec2 uCenter;
@@ -96,7 +100,7 @@ func NewGraphics() (*graphics, error) {
     `,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("Error building shader: %w", err)
+		return nil, fmt.Errorf("Error building spriteShader: %w", err)
 	}
 
 	g.coords = make([]float32, 3*2*2*1000)
@@ -113,44 +117,88 @@ func NewGraphics() (*graphics, error) {
 	g.w.BindBuffer(g.w.ARRAY_BUFFER, g.textureCoordsBuffer)
 	g.w.BufferDataSize(g.w.ARRAY_BUFFER, 4*len(g.textureCoords), g.w.DYNAMIC_DRAW)
 
+	g.pointShader, err = webgl.CreateProgram(
+		g.w,
+		`
+    uniform vec2 uCenter;
+    uniform vec2 uScale; 
+
+    attribute vec2 aVertexPosition;
+
+    void main() {
+      gl_Position = vec4((aVertexPosition-uCenter)/uScale, 0.0, 1.0);
+    }`,
+		`
+    precision highp float;
+
+    void main() {
+      gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+    }
+    `,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("Error building spriteShader: %w", err)
+	}
+
+	g.pointCoords = make([]float32, len(g.coords))
+
 	return g, nil
 }
 
 func (g *graphics) Flush() {
-	if g.written == 0 {
-		return
+	if g.pointsWritten > 0 {
+		g.w.UseProgram(g.pointShader)
+
+		uCenter := g.w.GetUniformLocation(g.pointShader, "uCenter")
+		g.w.Uniform2fv(uCenter, g.uCenter)
+
+		uScale := g.w.GetUniformLocation(g.pointShader, "uScale")
+		g.w.Uniform2fv(uScale, g.uScale)
+
+		g.w.BindBuffer(g.w.ARRAY_BUFFER, g.coordsBuffer)
+		g.w.BufferSubDataF32(g.w.ARRAY_BUFFER, 0, g.pointCoords[:g.pointsWritten])
+		aVertexPosition := g.w.GetAttribLocation(g.pointShader, "aVertexPosition")
+		g.w.EnableVertexAttribArray(aVertexPosition)
+		// Bind current array buffer to the given vertex attribute
+		g.w.VertexAttribPointer(aVertexPosition, 2, g.w.FLOAT, false, 0, 0) // 2 = points per vertex
+
+		g.w.DrawArrays(g.w.POINTS, 0, g.pointsWritten/2) // two floats per vertex
+
+		g.pointsWritten = 0
 	}
 
-	g.w.UseProgram(g.shader)
+	if g.written > 0 {
+		g.w.UseProgram(g.spriteShader)
 
-	uCenter := g.w.GetUniformLocation(g.shader, "uCenter")
-	g.w.Uniform2fv(uCenter, g.uCenter)
+		uCenter := g.w.GetUniformLocation(g.spriteShader, "uCenter")
+		g.w.Uniform2fv(uCenter, g.uCenter)
 
-	uScale := g.w.GetUniformLocation(g.shader, "uScale")
-	g.w.Uniform2fv(uScale, g.uScale)
+		uScale := g.w.GetUniformLocation(g.spriteShader, "uScale")
+		g.w.Uniform2fv(uScale, g.uScale)
 
-	g.w.BindBuffer(g.w.ARRAY_BUFFER, g.coordsBuffer)
-	g.w.BufferSubDataF32(g.w.ARRAY_BUFFER, 0, g.coords[:g.written])
-	aVertexPosition := g.w.GetAttribLocation(g.shader, "aVertexPosition")
-	g.w.EnableVertexAttribArray(aVertexPosition)
-	// Bind current array buffer to the given vertex attribute
-	g.w.VertexAttribPointer(aVertexPosition, 2, g.w.FLOAT, false, 0, 0) // 2 = points per vertex
+		g.w.BindBuffer(g.w.ARRAY_BUFFER, g.coordsBuffer)
+		g.w.BufferSubDataF32(g.w.ARRAY_BUFFER, 0, g.coords[:g.written])
+		aVertexPosition := g.w.GetAttribLocation(g.spriteShader, "aVertexPosition")
+		g.w.EnableVertexAttribArray(aVertexPosition)
+		// Bind current array buffer to the given vertex attribute
+		g.w.VertexAttribPointer(aVertexPosition, 2, g.w.FLOAT, false, 0, 0) // 2 = points per vertex
 
-	g.w.BindBuffer(g.w.ARRAY_BUFFER, g.textureCoordsBuffer)
-	g.w.BufferSubDataF32(g.w.ARRAY_BUFFER, 0, g.textureCoords[:g.written])
-	aTextureCoord := g.w.GetAttribLocation(g.shader, "aTextureCoord")
-	g.w.EnableVertexAttribArray(aTextureCoord)
-	// Bind current array buffer to the given vertex attribute
-	g.w.VertexAttribPointer(aTextureCoord, 2, g.w.FLOAT, false, 0, 0) // 2 = points per vertex
+		g.w.BindBuffer(g.w.ARRAY_BUFFER, g.textureCoordsBuffer)
+		g.w.BufferSubDataF32(g.w.ARRAY_BUFFER, 0, g.textureCoords[:g.written])
+		aTextureCoord := g.w.GetAttribLocation(g.spriteShader, "aTextureCoord")
+		g.w.EnableVertexAttribArray(aTextureCoord)
+		// Bind current array buffer to the given vertex attribute
+		g.w.VertexAttribPointer(aTextureCoord, 2, g.w.FLOAT, false, 0, 0) // 2 = points per vertex
 
-	g.w.ActiveTexture(g.w.TEXTURE0)
-	g.w.BindTexture(g.w.TEXTURE_2D, g.spritesheet)
-	uSampler := g.w.GetUniformLocation(g.shader, "uSampler")
-	g.w.Uniform1i(uSampler, 0)
+		g.w.ActiveTexture(g.w.TEXTURE0)
+		g.w.BindTexture(g.w.TEXTURE_2D, g.spritesheet)
+		uSampler := g.w.GetUniformLocation(g.spriteShader, "uSampler")
+		g.w.Uniform1i(uSampler, 0)
 
-	g.w.DrawArrays(g.w.TRIANGLES, 0, g.written/2) // two floats per vertex
+		g.w.DrawArrays(g.w.TRIANGLES, 0, g.written/2) // two floats per vertex
 
-	g.written = 0
+		g.written = 0
+	}
 
 	glError := g.w.GetError()
 	if glError.Int() != 0 {
@@ -206,6 +254,16 @@ func genTexCoords(xStart, yStart, xEnd, yEnd float32) []float32 {
 //      |             \_    |
 //  2 3 :     ----------4 5 : 8 9
 //
+
+func (g *graphics) Point(x, y float32) {
+	g.pointCoords[g.pointsWritten] = x
+	g.pointCoords[g.pointsWritten+1] = y
+	g.pointsWritten += 2
+
+	if g.pointsWritten >= len(g.pointCoords) {
+		g.Flush()
+	}
+}
 
 // TODO: spriteId -> size and texture location, rotation
 func (g *graphics) Sprite(s *Sprite, centerx, centery, rotation float32) {

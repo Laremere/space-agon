@@ -100,33 +100,44 @@ func (g *Game) Step(input *Input) {
 			i.Require(MomentumKey)
 			i.Require(ShipControlKey)
 			i.Require(LookupKey)
+			i.Require(AffectedByGravityKey)
 			i.New()
 
 			pos := i.Pos()
 			(*pos)[0] = 5
 			(*pos)[1] = 0
+			(*i.Momentum())[1] = 5
 			*i.Sprite() = SpriteShip
 			*i.Rot() = 0
 
 			g.ControlledShip = i.Lookup()
 		}
 
-		{ // spawn stars
-			i := g.E.NewIter()
-			i.Require(PosKey)
-			i.Require(SpriteKey)
-			i.New()
-			// Big star
-			*i.Sprite() = SpriteStar
-
-			// spawn small stars
-			for j := 0; j < 100; j++ {
+		if input.IsRendered { // spawn stars
+			{ // Big star
+				i := g.E.NewIter()
+				i.Require(PosKey)
+				i.Require(SpriteKey)
 				i.New()
-				*i.Sprite() = SpriteStarBit
-				const starBoxRadius = 50
-				*i.Pos() = Vec2{
-					rand.Float32()*starBoxRadius*2 - starBoxRadius,
-					rand.Float32()*starBoxRadius*2 - starBoxRadius,
+
+				*i.Sprite() = SpriteStar
+			}
+
+			{
+				i := g.E.NewIter()
+				i.Require(PosKey)
+				i.Require(PointRenderKey)
+
+				// spawn small stars
+				const density = 0.05
+				const starBoxRadius = 200
+				for j := 0; j < int(density*starBoxRadius*starBoxRadius); j++ {
+					i.New()
+					// *i.Sprite() = SpriteStarBit
+					*i.Pos() = Vec2{
+						rand.Float32()*starBoxRadius*2 - starBoxRadius,
+						rand.Float32()*starBoxRadius*2 - starBoxRadius,
+					}
 				}
 			}
 		}
@@ -137,18 +148,19 @@ func (g *Game) Step(input *Input) {
 	if input.IsRendered { // Spawn sun particles
 		i := g.E.NewIter()
 		i.Require(PosKey)
-		i.Require(SpriteKey)
+		// i.Require(SpriteKey)
+		i.Require(PointRenderKey)
 		i.Require(MomentumKey)
 		i.Require(TimedDestroyKey)
-		i.New()
 
-		*i.Sprite() = SpriteStarBit
-
-		rad := rand.Float32() * 2 * math.Pi
-		*i.Pos() = Vec2FromRadians(rad)
-		rad += rand.Float32()*2 - 1
-		*i.Momentum() = Vec2FromRadians(rad).Scale(rand.Float32()*5 + 1)
-		*i.TimedDestroy() = rand.Float32()*2 + 1
+		for j := 0; j < 10; j++ {
+			i.New()
+			rad := rand.Float32() * 2 * math.Pi
+			*i.Pos() = Vec2FromRadians(rad)
+			rad += rand.Float32()*2 - 1
+			*i.Momentum() = Vec2FromRadians(rad).Scale(rand.Float32()*5 + 1)
+			*i.TimedDestroy() = rand.Float32()*2 + 1
+		}
 	}
 
 	{
@@ -219,6 +231,32 @@ func (g *Game) Step(input *Input) {
 	}
 
 	{
+		// Force of gravity = gravconst * mass1 * mass2 / (distance)^2
+
+		// Update value = Dt * const * normalized direction vector / (distance)^2
+
+		// = Dt * const * (-1 * Pos / Pos.Lenght) / (Pos.Length) ^ 2
+		// = Dt * const * -1 * Pos / Pos.Length ^ 3
+		// = Pos.Scale(Dt * const * -1 / Pos.Length ^ 3)
+
+		// Pos.Length = (x*x + y*y) ^ 1/2
+		// sqrt then cube will probably be faster than taking to the power of 1.5?
+
+		i := g.E.NewIter()
+		i.Require(PosKey)
+		i.Require(AffectedByGravityKey)
+		i.Require(MomentumKey)
+
+		const gravityStrength = 200
+
+		for i.Next() {
+			length := i.Pos().Length()
+			lengthCubed := length * length * length
+			i.Momentum().AddEqual(i.Pos().Scale(-1 * gravityStrength * input.Dt / lengthCubed))
+		}
+	}
+
+	{
 		i := g.E.NewIter()
 		i.Require(PosKey)
 		i.Require(MomentumKey)
@@ -228,9 +266,6 @@ func (g *Game) Step(input *Input) {
 		}
 	}
 
-}
-
-func (g *Game) FrameEnd() {
 	{
 		i := g.E.NewIter()
 		i.Require(FrameEndDeleteKey)

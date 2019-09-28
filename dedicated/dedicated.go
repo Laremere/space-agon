@@ -1,6 +1,4 @@
-module github.com/googleforgames/space-agon
-
-// Copyright 2019 Google LLC
+// Copyright 2018 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +12,10 @@ module github.com/googleforgames/space-agon
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-go 1.13
+package dedicated
 
-require golang.org/x/net v0.0.0-20190926025831-c00fd9afed17
+import "golang.org/x/net/websocket"
+
+func Start() websocket.Handler {
+	return nil
+}

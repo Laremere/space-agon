@@ -52,6 +52,12 @@ func (v *Vec2) AddEqual(o Vec2) {
 	(*v)[1] += o[1]
 }
 
+func (v *Vec2) Length() float32 {
+	x := (*v)[0]
+	y := (*v)[1]
+	return float32(math.Sqrt(float64(x*x + y*y)))
+}
+
 type Lookup [2]int
 
 func (l *Lookup) Alive() bool {
@@ -64,6 +70,10 @@ type ShipControl struct {
 	Left  bool
 	Right bool
 	Fire  bool
+}
+
+type PlayerConnectedEvent struct {
+	// TODO: USE
 }
 
 // TODO NEXT: Make this into a component, remember the ship being controlled.
@@ -171,6 +181,8 @@ const (
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
 	KeepInCameraKey
+	AffectedByGravityKey
+	PointRenderKey
 
 	doNotMoveOrUseLastKeyForNumberOfKeys
 )
@@ -226,6 +238,7 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 		bag.Spin = &FloatComp{}
 		bag.comps = append(bag.comps, bag.Spin)
 	}
+
 	if inRequirement(compsKey, LookupKey) {
 		bag.Lookup = &LookupComp{}
 		bag.comps = append(bag.comps, bag.Lookup)
