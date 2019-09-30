@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"syscall/js"
 
@@ -38,9 +39,9 @@ func main() {
 }
 
 func newClient() (*client, error) {
-	inp := &game.Input{
-		IsRendered: true,
-	}
+	inp := game.NewInput()
+	inp.IsRendered = true
+	inp.IsPlayer = true
 	js.Global().Get("document").Call("addEventListener", "keydown", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		// log.Println("keydown", args[0].Get("code").String())
 		switch args[0].Get("code").String() {
@@ -71,6 +72,49 @@ func newClient() (*client, error) {
 		case "Space":
 			inp.Fire.Up()
 		}
+		return nil
+	}))
+
+	serverConn := game.NewNetworkConnection()
+	inp.Conns[0] = serverConn
+	ws := js.Global().Get("WebSocket").New("ws://" + js.Global().Get("window").Get("location").Get("host").String() + "/connect/")
+
+	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		go func() {
+			log.Println("Websocket onopen!", args[0].Get("toString"))
+
+			for toSend := range serverConn.Sending {
+				b, err := json.Marshal(toSend)
+				if err != nil {
+					log.Printf("Sending had Marshal error %v", err)
+					return
+				}
+				ws.Call("send", string(b))
+			}
+		}()
+		return nil
+	}))
+
+	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		// log.Println("Websocket onmessage!", args[0].Get("data").String())
+
+		v := game.NewNetworkUpdate()
+		err := json.Unmarshal([]byte(args[0].Get("data").String()), v)
+		if err != nil {
+			log.Printf("Recieving had Unmarshal error %v", err)
+			return nil
+		}
+		game.NetworkUpdateCombineAndPass(serverConn.Recieving, v)
+		return nil
+	}))
+
+	ws.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Websocket error!", args[0].Call("toString"))
+		return nil
+	}))
+
+	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Websocket closed!", args[0].Call("toString"))
 		return nil
 	}))
 

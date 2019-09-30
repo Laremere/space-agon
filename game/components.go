@@ -73,12 +73,9 @@ type ShipControl struct {
 	FireCoolDown float32
 }
 
+// TODO: Use?
 type PlayerConnectedEvent struct {
-	// TODO: USE
 }
-
-// TODO NEXT: Make this into a component, remember the ship being controlled.
-// then do networking and have the networking do ship control for the other ships.
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -162,6 +159,34 @@ func (c *ShipControlComp) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
 }
 
+type SpawnTypeComp []SpawnType
+
+func (c *SpawnTypeComp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *SpawnTypeComp) Extend(i int) {
+	*c = append(*c, 0)
+}
+
+func (c *SpawnTypeComp) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
+type NetworkIdComp []NetworkId
+
+func (c *NetworkIdComp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *NetworkIdComp) Extend(i int) {
+	*c = append(*c, 0)
+}
+
+func (c *NetworkIdComp) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -178,12 +203,26 @@ const (
 	SpinKey
 	LookupKey
 	ShipControlKey
+	SpawnEventKey
+	NetworkIdKey
 
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
 	KeepInCameraKey
 	AffectedByGravityKey
 	PointRenderKey
+
+	NetworkPosTransmitKey
+	NetworkRotTransmitKey
+	NetworkMomentumTransmitKey
+	NetworkSpinTransmitKey
+	NetworkShipControlTransmitKey
+
+	NetworkPosRecieveKey
+	NetworkRotRecieveKey
+	NetworkMomentumRecieveKey
+	NetworkSpinRecieveKey
+	NetworkShipControlRecieveKey
 
 	doNotMoveOrUseLastKeyForNumberOfKeys
 )
@@ -201,6 +240,8 @@ type EntityBag struct {
 	Spin         *FloatComp
 	Lookup       *LookupComp
 	ShipControl  *ShipControlComp
+	SpawnEvent   *SpawnTypeComp
+	NetworkId    *NetworkIdComp
 }
 
 func newEntityBag(compsKey *compsKey) *EntityBag {
@@ -248,6 +289,16 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 	if inRequirement(compsKey, ShipControlKey) {
 		bag.ShipControl = &ShipControlComp{}
 		bag.comps = append(bag.comps, bag.ShipControl)
+	}
+
+	if inRequirement(compsKey, SpawnEventKey) {
+		bag.SpawnEvent = &SpawnTypeComp{}
+		bag.comps = append(bag.comps, bag.SpawnEvent)
+	}
+
+	if inRequirement(compsKey, NetworkIdKey) {
+		bag.NetworkId = &NetworkIdComp{}
+		bag.comps = append(bag.comps, bag.NetworkId)
 	}
 
 	return bag
@@ -311,6 +362,22 @@ func (iter *Iter) Lookup() *Lookup {
 
 func (iter *Iter) ShipControl() *ShipControl {
 	comp := iter.e.bags[iter.i].ShipControl
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) SpawnEvent() *SpawnType {
+	comp := iter.e.bags[iter.i].SpawnEvent
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) NetworkId() *NetworkId {
+	comp := iter.e.bags[iter.i].NetworkId
 	if comp == nil {
 		return nil
 	}

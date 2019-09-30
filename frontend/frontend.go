@@ -15,6 +15,7 @@
 package main
 
 import (
+	"github.com/googleforgames/space-agon/dedicated"
 	"log"
 	"net/http"
 )
@@ -31,6 +32,8 @@ func main() {
 			http.NotFound(w, r)
 		}
 	})
+
+	http.Handle("/connect/", dedicated.Start())
 
 	log.Println("Starting server")
 	log.Fatal(http.ListenAndServe(":8080", nil))

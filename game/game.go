@@ -21,14 +21,19 @@ import (
 )
 
 type Game struct {
-	E              *Entities
-	initialized    bool
-	ControlledShip *Lookup
+	E               *Entities
+	initialized     bool
+	ControlledShip  *Lookup
+	NextNetworkId   NetworkId
+	NewClientUpdate *NetworkUpdate // TODO: Actually send to server from clients on connect
 }
 
 func NewGame() *Game {
 	g := &Game{
 		E: newEntities(),
+		// Oh man, this is such a bad hack.
+		NextNetworkId:   NetworkId(rand.Int63()),
+		NewClientUpdate: NewNetworkUpdate(),
 	}
 
 	return g
@@ -60,13 +65,26 @@ func (k *Keystate) Up() {
 }
 
 type Input struct {
-	Up         Keystate
-	Down       Keystate
-	Left       Keystate
-	Right      Keystate
-	Fire       Keystate
-	Dt         float32
+	Up    Keystate
+	Down  Keystate
+	Left  Keystate
+	Right Keystate
+	Fire  Keystate
+	Dt    float32
+	// Whether entities which only exist for render should be created.
 	IsRendered bool
+	// Whether code which runs only if the input is going to control
+	// a player ship should run.
+	IsPlayer bool
+	// Whether the this instance is the host, if not it is a client.
+	IsHost bool
+	Conns  map[int]*NetworkConnection
+}
+
+func NewInput() *Input {
+	return &Input{
+		Conns: make(map[int]*NetworkConnection),
+	}
 }
 
 func (inp *Input) FrameEndReset() {
@@ -90,28 +108,149 @@ func (g *Game) Step(input *Input) {
 		shipControl.Fire = input.Fire.Hold
 	}
 
+	connUpdatesOutputs := make(map[int]*NetworkUpdate)
+	connUpdatesOutputs[-1] = NewNetworkUpdate()
+
+	networkTracks := make(map[NetworkId]*NetworkTrack)
+
+	{
+		for id := range input.Conns {
+			connUpdatesOutputs[id] = NewNetworkUpdate()
+		}
+		for id, conn := range input.Conns {
+			select {
+			default:
+			case u := <-conn.Recieving:
+				//////////////////////
+				// spawn events
+				//////////////////////
+				for nid, spawnType := range u.SpawnEvents {
+
+					for oid := range connUpdatesOutputs {
+						if oid != id {
+							connUpdatesOutputs[oid].SpawnEvents[nid] = spawnType
+						}
+					}
+
+					switch spawnType {
+					case SpawnShip:
+						i := g.E.NewIter()
+						i.Require(NetworkPosRecieveKey)
+						i.Require(NetworkRotRecieveKey)
+						i.Require(NetworkMomentumRecieveKey)
+						i.Require(NetworkSpinRecieveKey)
+						i.Require(NetworkShipControlRecieveKey)
+						spawnSpaceship(i)
+						*i.NetworkId() = nid
+
+					case SpawnMissile:
+						panic("Spawn what now?")
+					default:
+						panic("Spawn what now?")
+					}
+				}
+
+				//////////////////////
+				// Tracks
+				//////////////////////
+
+				for nid, t := range u.Tracks {
+					networkTracks[nid] = t
+					for oid := range connUpdatesOutputs {
+						if oid != id {
+							connUpdatesOutputs[oid].Tracks[nid] = t
+						}
+					}
+				}
+			}
+		}
+	}
+
+	{ // Track Pos
+		i := g.E.NewIter()
+		i.Require(PosKey)
+		i.Require(NetworkPosRecieveKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			track, ok := networkTracks[*i.NetworkId()]
+			if ok {
+				*i.Pos() = track.Pos
+			}
+		}
+	}
+	{ // Track Rot
+		i := g.E.NewIter()
+		i.Require(RotKey)
+		i.Require(NetworkRotRecieveKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			track, ok := networkTracks[*i.NetworkId()]
+			if ok {
+				*i.Rot() = track.Rot
+			}
+		}
+	}
+	{ // Track Momentum
+		i := g.E.NewIter()
+		i.Require(MomentumKey)
+		i.Require(NetworkMomentumRecieveKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			track, ok := networkTracks[*i.NetworkId()]
+			if ok {
+				*i.Momentum() = track.Momentum
+			}
+		}
+	}
+	{ // Track Spin
+		i := g.E.NewIter()
+		i.Require(SpinKey)
+		i.Require(NetworkSpinRecieveKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			track, ok := networkTracks[*i.NetworkId()]
+			if ok {
+				*i.Spin() = track.Spin
+			}
+		}
+	}
+	{ // Track ShipControl
+		i := g.E.NewIter()
+		i.Require(ShipControlKey)
+		i.Require(NetworkShipControlRecieveKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			track, ok := networkTracks[*i.NetworkId()]
+			if ok {
+				*i.ShipControl() = track.ShipControl
+			}
+		}
+	}
+
 	if !g.initialized {
-		{ // Spawn Spaceship
+		if input.IsPlayer { // Spawn Spaceship
 			i := g.E.NewIter()
-			i.Require(PosKey)
-			i.Require(RotKey)
-			i.Require(SpriteKey)
-			i.Require(KeepInCameraKey)
-			i.Require(SpinKey)
-			i.Require(MomentumKey)
-			i.Require(ShipControlKey)
-			i.Require(LookupKey)
-			i.Require(AffectedByGravityKey)
-			i.New()
+			i.Require(NetworkPosTransmitKey)
+			i.Require(NetworkRotTransmitKey)
+			i.Require(NetworkMomentumTransmitKey)
+			i.Require(NetworkSpinTransmitKey)
+			i.Require(NetworkShipControlTransmitKey)
+			spawnSpaceship(i)
 
 			pos := i.Pos()
-			(*pos)[0] = 20
+			(*pos)[0] = 7
 			(*pos)[1] = 0
 			(*i.Momentum())[1] = 5
-			*i.Sprite() = SpriteShip
 			*i.Rot() = 0
+			*i.NetworkId() = g.NextNetworkId
+			g.NextNetworkId++
 
 			g.ControlledShip = i.Lookup()
+
+			for _, u := range connUpdatesOutputs {
+				u.SpawnEvents[*i.NetworkId()] = SpawnShip
+			}
+
 		}
 
 		if input.IsRendered { // spawn stars
@@ -307,4 +446,153 @@ func (g *Game) Step(input *Input) {
 			i.Remove()
 		}
 	}
+
+	{ // Transmit Pos
+		i := g.E.NewIter()
+		i.Require(PosKey)
+		i.Require(NetworkPosTransmitKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			for _, u := range connUpdatesOutputs {
+				t, ok := u.Tracks[*i.NetworkId()]
+				if !ok {
+					t = &NetworkTrack{}
+					u.Tracks[*i.NetworkId()] = t
+				}
+				t.Pos = *i.Pos()
+			}
+		}
+	}
+	{ // Transmit Rot
+		i := g.E.NewIter()
+		i.Require(RotKey)
+		i.Require(NetworkRotTransmitKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			for _, u := range connUpdatesOutputs {
+				t, ok := u.Tracks[*i.NetworkId()]
+				if !ok {
+					t = &NetworkTrack{}
+					u.Tracks[*i.NetworkId()] = t
+				}
+				t.Rot = *i.Rot()
+			}
+		}
+	}
+	{ // Transmit Momentum
+		i := g.E.NewIter()
+		i.Require(MomentumKey)
+		i.Require(NetworkMomentumTransmitKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			for _, u := range connUpdatesOutputs {
+				t, ok := u.Tracks[*i.NetworkId()]
+				if !ok {
+					t = &NetworkTrack{}
+					u.Tracks[*i.NetworkId()] = t
+				}
+				t.Momentum = *i.Momentum()
+			}
+		}
+	}
+	{ // Transmit Spin
+		i := g.E.NewIter()
+		i.Require(SpinKey)
+		i.Require(NetworkSpinTransmitKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			for _, u := range connUpdatesOutputs {
+				t, ok := u.Tracks[*i.NetworkId()]
+				if !ok {
+					t = &NetworkTrack{}
+					u.Tracks[*i.NetworkId()] = t
+				}
+				t.Spin = *i.Spin()
+			}
+		}
+	}
+
+	for id := range input.Conns {
+		NetworkUpdateCombineAndPass(input.Conns[id].Sending, connUpdatesOutputs[id])
+	}
+
+	g.NewClientUpdate.AndThen(connUpdatesOutputs[-1])
+}
+
+type NetworkConnection struct {
+	Sending   chan *NetworkUpdate
+	Recieving chan *NetworkUpdate
+}
+
+func NewNetworkConnection() *NetworkConnection {
+	n := &NetworkConnection{
+		Sending:   make(chan *NetworkUpdate, 1),
+		Recieving: make(chan *NetworkUpdate, 1),
+	}
+	return n
+}
+
+func NetworkUpdateCombineAndPass(c chan *NetworkUpdate, u *NetworkUpdate) {
+	select {
+	case c <- u:
+	case uPrevious := <-c:
+		toSend := NewNetworkUpdate()
+		toSend.AndThen(uPrevious)
+		toSend.AndThen(u)
+		c <- toSend
+	}
+}
+
+type NetworkId uint64
+
+type NetworkUpdate struct {
+	SpawnEvents map[NetworkId]SpawnType
+	Tracks      map[NetworkId]*NetworkTrack
+}
+
+func NewNetworkUpdate() *NetworkUpdate {
+	return &NetworkUpdate{
+		SpawnEvents: make(map[NetworkId]SpawnType),
+		Tracks:      make(map[NetworkId]*NetworkTrack),
+	}
+}
+
+func (uPrevious *NetworkUpdate) AndThen(uNext *NetworkUpdate) {
+	for k, v := range uNext.Tracks {
+		uPrevious.Tracks[k] = v
+	}
+	for k, v := range uNext.SpawnEvents {
+		uPrevious.SpawnEvents[k] = v
+	}
+}
+
+type SpawnType uint
+
+const (
+	SpawnShip = SpawnType(iota)
+	SpawnMissile
+)
+
+type NetworkTrack struct {
+	Pos         Vec2
+	Momentum    Vec2
+	Rot         float32
+	Spin        float32
+	ShipControl ShipControl
+}
+
+func spawnSpaceship(i *Iter) {
+	i.Require(PosKey)
+	i.Require(RotKey)
+	i.Require(SpriteKey)
+	i.Require(KeepInCameraKey)
+	i.Require(SpinKey)
+	i.Require(MomentumKey)
+	i.Require(ShipControlKey)
+	i.Require(LookupKey)
+	i.Require(AffectedByGravityKey)
+	i.Require(NetworkIdKey)
+	i.New()
+
+	*i.Sprite() = SpriteShip
 }
