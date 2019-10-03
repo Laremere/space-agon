@@ -342,16 +342,19 @@ func (g *Game) Step(input *Input) {
 
 		for i.Next() {
 			if !i.ExplosionDetails().Initialized {
-				log.Println("Fun time")
+				// log.Println("Fun time")
 				i.ExplosionDetails().Initialized = true
-				for j := 0; j < 100; j++ {
-					speed := rand.Float32()*10 + 1
-					dir := rand.Float32() * math.Pi
+				for j := 0; j < 1000; j++ {
+					speed := rand.Float32()*10 + 0.01
+					dir := rand.Float32() * math.Pi * 2
 					ttl := 1.0/speed + rand.Float32()
+					if ttl > 3 {
+						ttl = 3
+					}
 
 					pi.New()
 					*pi.Pos() = *i.Pos()
-					log.Println(*pi.Pos())
+					// log.Println(*pi.Pos())
 					*pi.Momentum() = i.Momentum().Add(Vec2FromRadians(dir).Scale(speed))
 					*pi.TimedDestroy() = ttl
 				}
@@ -561,6 +564,17 @@ func (g *Game) Step(input *Input) {
 	}
 
 	{
+		i := g.E.Iter()
+		i.Require(BoundLocationKey)
+		i.Require(PosKey)
+		i.Require(MomentumKey)
+
+		for i.Next() {
+			// TODO: Slow ships too far away from going further
+		}
+	}
+
+	{
 		// Force of gravity = gravconst * mass1 * mass2 / (distance)^2
 
 		// Update value = Dt * const * normalized direction vector / (distance)^2
@@ -763,6 +777,7 @@ func spawnSpaceship(i *Iter) {
 	i.Require(LookupKey)
 	i.Require(AffectedByGravityKey)
 	i.Require(NetworkIdKey)
+	i.Require(BoundLocationKey)
 	i.New()
 
 	*i.Sprite() = SpriteShip
@@ -790,5 +805,5 @@ func spawnExplosion(i *Iter) {
 	i.New()
 	// REMOVE TO TRIGGER WASM BUG, IS ERRONOUSLY TRUE
 	i.ExplosionDetails().Initialized = false
-	log.Println("Is initialized", i.ExplosionDetails().Initialized)
+	// log.Println("Is initialized", i.ExplosionDetails().Initialized)
 }

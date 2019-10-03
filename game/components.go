@@ -232,6 +232,7 @@ const (
 	AffectedByGravityKey
 	PointRenderKey
 	MissileKey
+	BoundLocationKey
 
 	NetworkTransmitKey
 	// NetworkPosTransmitKey
