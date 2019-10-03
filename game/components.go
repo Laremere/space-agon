@@ -211,18 +211,21 @@ const (
 	KeepInCameraKey
 	AffectedByGravityKey
 	PointRenderKey
+	MissileKey
 
-	NetworkPosTransmitKey
-	NetworkRotTransmitKey
-	NetworkMomentumTransmitKey
-	NetworkSpinTransmitKey
-	NetworkShipControlTransmitKey
+	NetworkTransmitKey
+	// NetworkPosTransmitKey
+	// NetworkRotTransmitKey
+	// NetworkMomentumTransmitKey
+	// NetworkSpinTransmitKey
+	// NetworkShipControlTransmitKey
 
-	NetworkPosRecieveKey
-	NetworkRotRecieveKey
-	NetworkMomentumRecieveKey
-	NetworkSpinRecieveKey
-	NetworkShipControlRecieveKey
+	NetworkRecieveKey
+	// NetworkPosRecieveKey
+	// NetworkRotRecieveKey
+	// NetworkMomentumRecieveKey
+	// NetworkSpinRecieveKey
+	// NetworkShipControlRecieveKey
 
 	doNotMoveOrUseLastKeyForNumberOfKeys
 )

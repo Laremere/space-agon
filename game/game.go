@@ -15,7 +15,6 @@
 package game
 
 import (
-	"log"
 	"math"
 	"math/rand"
 )
@@ -112,6 +111,7 @@ func (g *Game) Step(input *Input) {
 	connUpdatesOutputs[-1] = NewNetworkUpdate()
 
 	networkTracks := make(map[NetworkId]*NetworkTrack)
+	destroyEvents := make(map[NetworkId]struct{})
 
 	{
 		for id := range input.Conns {
@@ -121,6 +121,15 @@ func (g *Game) Step(input *Input) {
 			select {
 			default:
 			case u := <-conn.Recieving:
+				for nid := range u.DestroyEvents {
+					for oid := range connUpdatesOutputs {
+						if oid != id {
+							connUpdatesOutputs[oid].DestroyEvents[nid] = struct{}{}
+						}
+					}
+					// log.Println("Got destroy for", nid)
+					destroyEvents[nid] = struct{}{}
+				}
 				//////////////////////
 				// spawn events
 				//////////////////////
@@ -135,20 +144,22 @@ func (g *Game) Step(input *Input) {
 					switch spawnType {
 					case SpawnShip:
 						i := g.E.NewIter()
-						i.Require(NetworkPosRecieveKey)
-						i.Require(NetworkRotRecieveKey)
-						i.Require(NetworkMomentumRecieveKey)
-						i.Require(NetworkSpinRecieveKey)
-						i.Require(NetworkShipControlRecieveKey)
+						i.Require(NetworkRecieveKey)
+						// i.Require(NetworkPosRecieveKey)
+						// i.Require(NetworkRotRecieveKey)
+						// i.Require(NetworkMomentumRecieveKey)
+						// i.Require(NetworkSpinRecieveKey)
+						// i.Require(NetworkShipControlRecieveKey)
 						spawnSpaceship(i)
 						*i.NetworkId() = nid
 
 					case SpawnMissile:
 						i := g.E.NewIter()
-						i.Require(NetworkPosRecieveKey)
-						i.Require(NetworkRotRecieveKey)
-						i.Require(NetworkMomentumRecieveKey)
-						i.Require(NetworkSpinRecieveKey)
+						i.Require(NetworkRecieveKey)
+						// i.Require(NetworkPosRecieveKey)
+						// i.Require(NetworkRotRecieveKey)
+						// i.Require(NetworkMomentumRecieveKey)
+						// i.Require(NetworkSpinRecieveKey)
 						spawnMissile(i)
 						*i.NetworkId() = nid
 
@@ -173,10 +184,23 @@ func (g *Game) Step(input *Input) {
 		}
 	}
 
+	{ // Despawn destroyed
+		i := g.E.NewIter()
+		// i.Require(PosKey)
+		// i.Require(NetworkRecieveKey)
+		// i.Require(NetworkPosRecieveKey)
+		i.Require(NetworkIdKey)
+		for i.Next() {
+			if _, ok := destroyEvents[*i.NetworkId()]; ok {
+				i.Remove()
+			}
+		}
+	}
 	{ // Track Pos
 		i := g.E.NewIter()
 		i.Require(PosKey)
-		i.Require(NetworkPosRecieveKey)
+		i.Require(NetworkRecieveKey)
+		// i.Require(NetworkPosRecieveKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			track, ok := networkTracks[*i.NetworkId()]
@@ -188,7 +212,8 @@ func (g *Game) Step(input *Input) {
 	{ // Track Rot
 		i := g.E.NewIter()
 		i.Require(RotKey)
-		i.Require(NetworkRotRecieveKey)
+		i.Require(NetworkRecieveKey)
+		// i.Require(NetworkRotRecieveKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			track, ok := networkTracks[*i.NetworkId()]
@@ -200,7 +225,8 @@ func (g *Game) Step(input *Input) {
 	{ // Track Momentum
 		i := g.E.NewIter()
 		i.Require(MomentumKey)
-		i.Require(NetworkMomentumRecieveKey)
+		i.Require(NetworkRecieveKey)
+		// i.Require(NetworkMomentumRecieveKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			track, ok := networkTracks[*i.NetworkId()]
@@ -212,7 +238,8 @@ func (g *Game) Step(input *Input) {
 	{ // Track Spin
 		i := g.E.NewIter()
 		i.Require(SpinKey)
-		i.Require(NetworkSpinRecieveKey)
+		i.Require(NetworkRecieveKey)
+		// i.Require(NetworkSpinRecieveKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			track, ok := networkTracks[*i.NetworkId()]
@@ -224,7 +251,8 @@ func (g *Game) Step(input *Input) {
 	{ // Track ShipControl
 		i := g.E.NewIter()
 		i.Require(ShipControlKey)
-		i.Require(NetworkShipControlRecieveKey)
+		i.Require(NetworkRecieveKey)
+		// i.Require(NetworkShipControlRecieveKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			track, ok := networkTracks[*i.NetworkId()]
@@ -237,11 +265,12 @@ func (g *Game) Step(input *Input) {
 	if !g.initialized {
 		if input.IsPlayer { // Spawn Spaceship
 			i := g.E.NewIter()
-			i.Require(NetworkPosTransmitKey)
-			i.Require(NetworkRotTransmitKey)
-			i.Require(NetworkMomentumTransmitKey)
-			i.Require(NetworkSpinTransmitKey)
-			i.Require(NetworkShipControlTransmitKey)
+			i.Require(NetworkTransmitKey)
+			// i.Require(NetworkPosTransmitKey)
+			// i.Require(NetworkRotTransmitKey)
+			// i.Require(NetworkMomentumTransmitKey)
+			// i.Require(NetworkSpinTransmitKey)
+			// i.Require(NetworkShipControlTransmitKey)
 			spawnSpaceship(i)
 
 			pos := i.Pos()
@@ -316,6 +345,12 @@ func (g *Game) Step(input *Input) {
 		for i.Next() {
 			*i.TimedDestroy() -= input.Dt
 			if *i.TimedDestroy() <= 0 {
+				if i.NetworkId() != nil {
+					for _, u := range connUpdatesOutputs {
+						// log.Println("Sent destroy for ", *i.NetworkId())
+						u.DestroyEvents[*i.NetworkId()] = struct{}{}
+					}
+				}
 				i.Remove()
 			}
 		}
@@ -378,12 +413,14 @@ func (g *Game) Step(input *Input) {
 				// i.ShipControl().FireCoolDown = 5
 
 				im := g.E.NewIter()
-				im.Require(NetworkPosTransmitKey)
-				im.Require(NetworkRotTransmitKey)
-				im.Require(NetworkMomentumTransmitKey)
-				im.Require(NetworkSpinTransmitKey)
+				im.Require(NetworkTransmitKey)
+				// im.Require(NetworkPosTransmitKey)
+				// im.Require(NetworkRotTransmitKey)
+				// im.Require(NetworkMomentumTransmitKey)
+				// im.Require(NetworkSpinTransmitKey)
+				im.Require(TimedDestroyKey)
 				spawnMissile(im)
-
+				*im.TimedDestroy() = 2
 				*im.Pos() = *i.Pos()
 				*im.Rot() = *i.Rot()
 				*im.Spin() = *i.Spin()
@@ -397,6 +434,45 @@ func (g *Game) Step(input *Input) {
 				for _, u := range connUpdatesOutputs {
 					u.SpawnEvents[*im.NetworkId()] = SpawnMissile
 				}
+			}
+		}
+	}
+
+	{
+		i := g.E.NewIter()
+		i.Require(RotKey)
+		i.Require(MomentumKey)
+		i.Require(MissileKey)
+
+		for i.Next() {
+			const pushFactor = 10
+			i.Momentum().AddEqual(Vec2FromRadians(*i.Rot()).Scale(pushFactor * input.Dt))
+		}
+	}
+
+	if input.IsRendered { // Spawn missile trail particles
+		i := g.E.NewIter()
+		i.Require(RotKey)
+		i.Require(MissileKey)
+		i.Require(PosKey)
+
+		ip := g.E.NewIter()
+		ip.Require(PosKey)
+		ip.Require(PointRenderKey)
+		ip.Require(MomentumKey)
+		ip.Require(TimedDestroyKey)
+
+		for i.Next() {
+			const pushFactor = 5
+
+			for j := 0; j < 4; j++ {
+				ip.New()
+				*ip.Pos() = *i.Pos()
+
+				angleOut := *i.Rot() + math.Pi + (rand.Float32()-0.5)/2
+				*ip.Momentum() = i.Momentum().Add(Vec2FromRadians(angleOut).Scale(pushFactor))
+				ip.Pos().AddEqual(ip.Momentum().Scale(float32(j) * input.Dt / 4))
+				*ip.TimedDestroy() = rand.Float32()*2 + 1
 			}
 		}
 	}
@@ -458,7 +534,8 @@ func (g *Game) Step(input *Input) {
 	{ // Transmit Pos
 		i := g.E.NewIter()
 		i.Require(PosKey)
-		i.Require(NetworkPosTransmitKey)
+		i.Require(NetworkTransmitKey)
+		// i.Require(NetworkPosTransmitKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			for _, u := range connUpdatesOutputs {
@@ -474,7 +551,8 @@ func (g *Game) Step(input *Input) {
 	{ // Transmit Rot
 		i := g.E.NewIter()
 		i.Require(RotKey)
-		i.Require(NetworkRotTransmitKey)
+		i.Require(NetworkTransmitKey)
+		// i.Require(NetworkRotTransmitKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			for _, u := range connUpdatesOutputs {
@@ -490,7 +568,8 @@ func (g *Game) Step(input *Input) {
 	{ // Transmit Momentum
 		i := g.E.NewIter()
 		i.Require(MomentumKey)
-		i.Require(NetworkMomentumTransmitKey)
+		i.Require(NetworkTransmitKey)
+		// i.Require(NetworkMomentumTransmitKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			for _, u := range connUpdatesOutputs {
@@ -506,7 +585,8 @@ func (g *Game) Step(input *Input) {
 	{ // Transmit Spin
 		i := g.E.NewIter()
 		i.Require(SpinKey)
-		i.Require(NetworkSpinTransmitKey)
+		i.Require(NetworkTransmitKey)
+		// i.Require(NetworkSpinTransmitKey)
 		i.Require(NetworkIdKey)
 		for i.Next() {
 			for _, u := range connUpdatesOutputs {
@@ -554,14 +634,16 @@ func NetworkUpdateCombineAndPass(c chan *NetworkUpdate, u *NetworkUpdate) {
 type NetworkId uint64
 
 type NetworkUpdate struct {
-	SpawnEvents map[NetworkId]SpawnType
-	Tracks      map[NetworkId]*NetworkTrack
+	SpawnEvents   map[NetworkId]SpawnType
+	DestroyEvents map[NetworkId]struct{}
+	Tracks        map[NetworkId]*NetworkTrack
 }
 
 func NewNetworkUpdate() *NetworkUpdate {
 	return &NetworkUpdate{
-		SpawnEvents: make(map[NetworkId]SpawnType),
-		Tracks:      make(map[NetworkId]*NetworkTrack),
+		SpawnEvents:   make(map[NetworkId]SpawnType),
+		DestroyEvents: make(map[NetworkId]struct{}),
+		Tracks:        make(map[NetworkId]*NetworkTrack),
 	}
 }
 
@@ -571,6 +653,13 @@ func (uPrevious *NetworkUpdate) AndThen(uNext *NetworkUpdate) {
 	}
 	for k, v := range uNext.SpawnEvents {
 		uPrevious.SpawnEvents[k] = v
+	}
+	for k, v := range uNext.DestroyEvents {
+		if _, ok := uPrevious.SpawnEvents[k]; ok {
+			delete(uPrevious.SpawnEvents, k)
+		} else {
+			uPrevious.DestroyEvents[k] = v
+		}
 	}
 }
 
@@ -612,10 +701,9 @@ func spawnMissile(i *Iter) {
 	i.Require(MomentumKey)
 	i.Require(SpriteKey)
 	i.Require(AffectedByGravityKey)
-	i.Require(TimedDestroyKey)
 	i.Require(NetworkIdKey)
+	i.Require(MissileKey)
 	i.New()
 
 	*i.Sprite() = SpriteMissile
-	*i.TimedDestroy() = 10
 }
