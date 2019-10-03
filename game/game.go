@@ -15,6 +15,7 @@
 package game
 
 import (
+	"log"
 	"math"
 	"math/rand"
 )
@@ -161,6 +162,12 @@ func (g *Game) Step(input *Input) {
 						// i.Require(NetworkMomentumRecieveKey)
 						// i.Require(NetworkSpinRecieveKey)
 						spawnMissile(i)
+						*i.NetworkId() = nid
+
+					case SpawnExplosion:
+						i := g.E.NewIter()
+						i.Require(NetworkRecieveKey)
+						spawnExplosion(i)
 						*i.NetworkId() = nid
 
 					default:
@@ -321,6 +328,37 @@ func (g *Game) Step(input *Input) {
 		g.initialized = true
 	}
 
+	if input.IsRendered { // explosion fun :D
+		i := g.E.NewIter()
+		i.Require(PosKey)
+		i.Require(MomentumKey)
+		i.Require(ExplosionDetailsKey)
+
+		pi := g.E.NewIter() // particle iter
+		pi.Require(PosKey)
+		pi.Require(MomentumKey)
+		pi.Require(TimedDestroyKey)
+		pi.Require(PointRenderKey)
+
+		for i.Next() {
+			if !i.ExplosionDetails().Initialized {
+				log.Println("Fun time")
+				i.ExplosionDetails().Initialized = true
+				for j := 0; j < 100; j++ {
+					speed := rand.Float32()*10 + 1
+					dir := rand.Float32() * math.Pi
+					ttl := 1.0/speed + rand.Float32()
+
+					pi.New()
+					*pi.Pos() = *i.Pos()
+					log.Println(*pi.Pos())
+					*pi.Momentum() = i.Momentum().Add(Vec2FromRadians(dir).Scale(speed))
+					*pi.TimedDestroy() = ttl
+				}
+			}
+		}
+	}
+
 	if input.IsRendered { // Spawn sun particles
 		i := g.E.NewIter()
 		i.Require(PosKey)
@@ -345,6 +383,39 @@ func (g *Game) Step(input *Input) {
 		for i.Next() {
 			*i.TimedDestroy() -= input.Dt
 			if *i.TimedDestroy() <= 0 {
+				if i.NetworkId() != nil {
+					for _, u := range connUpdatesOutputs {
+						// log.Println("Sent destroy for ", *i.NetworkId())
+						u.DestroyEvents[*i.NetworkId()] = struct{}{}
+					}
+				}
+				i.Remove()
+			}
+		}
+	}
+
+	{
+		i := g.E.NewIter()
+		i.Require(TimedExplodeKey)
+		i.Require(PosKey)
+		i.Require(MomentumKey)
+		for i.Next() {
+			*i.TimedExplode() -= input.Dt
+			if *i.TimedExplode() <= 0 {
+				ie := g.E.NewIter()
+				ie.Require(NetworkTransmitKey)
+				ie.Require(TimedDestroyKey)
+				spawnExplosion(ie)
+				*ie.Pos() = *i.Pos()
+				*ie.Momentum() = *i.Momentum()
+				*ie.NetworkId() = g.NextNetworkId
+				*ie.TimedDestroy() = 0.5
+				g.NextNetworkId++
+
+				for _, u := range connUpdatesOutputs {
+					u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
+				}
+
 				if i.NetworkId() != nil {
 					for _, u := range connUpdatesOutputs {
 						// log.Println("Sent destroy for ", *i.NetworkId())
@@ -418,9 +489,11 @@ func (g *Game) Step(input *Input) {
 				// im.Require(NetworkRotTransmitKey)
 				// im.Require(NetworkMomentumTransmitKey)
 				// im.Require(NetworkSpinTransmitKey)
-				im.Require(TimedDestroyKey)
+				// im.Require(TimedDestroyKey)
+				im.Require(TimedExplodeKey)
 				spawnMissile(im)
-				*im.TimedDestroy() = 2
+				// *im.TimedDestroy() = 2
+				*im.TimedExplode() = 2
 				*im.Pos() = *i.Pos()
 				*im.Rot() = *i.Rot()
 				*im.Spin() = *i.Spin()
@@ -668,6 +741,7 @@ type SpawnType uint
 const (
 	SpawnShip = SpawnType(iota)
 	SpawnMissile
+	SpawnExplosion
 )
 
 type NetworkTrack struct {
@@ -706,4 +780,15 @@ func spawnMissile(i *Iter) {
 	i.New()
 
 	*i.Sprite() = SpriteMissile
+}
+
+func spawnExplosion(i *Iter) {
+	i.Require(PosKey)
+	i.Require(MomentumKey)
+	i.Require(ExplosionDetailsKey)
+	i.Require(NetworkIdKey)
+	i.New()
+	// REMOVE TO TRIGGER WASM BUG, IS ERRONOUSLY TRUE
+	i.ExplosionDetails().Initialized = false
+	log.Println("Is initialized", i.ExplosionDetails().Initialized)
 }

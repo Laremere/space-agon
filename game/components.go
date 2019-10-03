@@ -77,6 +77,10 @@ type ShipControl struct {
 type PlayerConnectedEvent struct {
 }
 
+type ExplosionDetails struct {
+	Initialized bool
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -187,6 +191,20 @@ func (c *NetworkIdComp) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
 }
 
+type ExplosionDetailsComp []ExplosionDetails
+
+func (c *ExplosionDetailsComp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *ExplosionDetailsComp) Extend(i int) {
+	*c = append(*c, ExplosionDetails{Initialized: false})
+}
+
+func (c *ExplosionDetailsComp) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -199,12 +217,14 @@ const (
 	SpriteKey
 	RotKey
 	TimedDestroyKey
+	TimedExplodeKey
 	MomentumKey
 	SpinKey
 	LookupKey
 	ShipControlKey
 	SpawnEventKey
 	NetworkIdKey
+	ExplosionDetailsKey
 
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
@@ -235,16 +255,18 @@ type EntityBag struct {
 	comps    []Comp
 	compsKey compsKey
 
-	Pos          *Vec2Comp
-	Sprite       *SpriteComp
-	Rot          *FloatComp
-	TimedDestroy *FloatComp
-	Momentum     *Vec2Comp
-	Spin         *FloatComp
-	Lookup       *LookupComp
-	ShipControl  *ShipControlComp
-	SpawnEvent   *SpawnTypeComp
-	NetworkId    *NetworkIdComp
+	Pos              *Vec2Comp
+	Sprite           *SpriteComp
+	Rot              *FloatComp
+	TimedDestroy     *FloatComp
+	TimedExplode     *FloatComp
+	Momentum         *Vec2Comp
+	Spin             *FloatComp
+	Lookup           *LookupComp
+	ShipControl      *ShipControlComp
+	SpawnEvent       *SpawnTypeComp
+	NetworkId        *NetworkIdComp
+	ExplosionDetails *ExplosionDetailsComp
 }
 
 func newEntityBag(compsKey *compsKey) *EntityBag {
@@ -272,6 +294,16 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 	if inRequirement(compsKey, TimedDestroyKey) {
 		bag.TimedDestroy = &FloatComp{}
 		bag.comps = append(bag.comps, bag.TimedDestroy)
+	}
+
+	if inRequirement(compsKey, TimedDestroyKey) {
+		bag.TimedDestroy = &FloatComp{}
+		bag.comps = append(bag.comps, bag.TimedDestroy)
+	}
+
+	if inRequirement(compsKey, TimedExplodeKey) {
+		bag.TimedExplode = &FloatComp{}
+		bag.comps = append(bag.comps, bag.TimedExplode)
 	}
 
 	if inRequirement(compsKey, MomentumKey) {
@@ -304,6 +336,11 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 		bag.comps = append(bag.comps, bag.NetworkId)
 	}
 
+	if inRequirement(compsKey, ExplosionDetailsKey) {
+		bag.ExplosionDetails = &ExplosionDetailsComp{}
+		bag.comps = append(bag.comps, bag.ExplosionDetails)
+	}
+
 	return bag
 }
 
@@ -333,6 +370,14 @@ func (iter *Iter) Rot() *float32 {
 
 func (iter *Iter) TimedDestroy() *float32 {
 	comp := iter.e.bags[iter.i].TimedDestroy
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) TimedExplode() *float32 {
+	comp := iter.e.bags[iter.i].TimedExplode
 	if comp == nil {
 		return nil
 	}
@@ -381,6 +426,14 @@ func (iter *Iter) SpawnEvent() *SpawnType {
 
 func (iter *Iter) NetworkId() *NetworkId {
 	comp := iter.e.bags[iter.i].NetworkId
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) ExplosionDetails() *ExplosionDetails {
+	comp := iter.e.bags[iter.i].ExplosionDetails
 	if comp == nil {
 		return nil
 	}
