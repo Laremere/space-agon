@@ -144,7 +144,14 @@ func (g *Game) Step(input *Input) {
 						*i.NetworkId() = nid
 
 					case SpawnMissile:
-						panic("Spawn what now?")
+						i := g.E.NewIter()
+						i.Require(NetworkPosRecieveKey)
+						i.Require(NetworkRotRecieveKey)
+						i.Require(NetworkMomentumRecieveKey)
+						i.Require(NetworkSpinRecieveKey)
+						spawnMissile(i)
+						*i.NetworkId() = nid
+
 					default:
 						panic("Spawn what now?")
 					}
@@ -371,24 +378,25 @@ func (g *Game) Step(input *Input) {
 				// i.ShipControl().FireCoolDown = 5
 
 				im := g.E.NewIter()
-				im.Require(PosKey)
-				im.Require(RotKey)
-				im.Require(SpinKey)
-				im.Require(MomentumKey)
-				im.Require(SpriteKey)
-				im.Require(AffectedByGravityKey)
-				im.Require(TimedDestroyKey)
-				im.New()
+				im.Require(NetworkPosTransmitKey)
+				im.Require(NetworkRotTransmitKey)
+				im.Require(NetworkMomentumTransmitKey)
+				im.Require(NetworkSpinTransmitKey)
+				spawnMissile(im)
 
-				*im.Sprite() = SpriteMissile
-				*im.TimedDestroy() = 10
 				*im.Pos() = *i.Pos()
 				*im.Rot() = *i.Rot()
 				*im.Spin() = *i.Spin()
 				const MissileSpeed = 10
-				log.Println(*i.Rot() / math.Pi * 180)
 				*im.Momentum() = *i.Momentum()
 				im.Momentum().AddEqual(Vec2FromRadians(*i.Rot()).Scale(MissileSpeed))
+
+				*im.NetworkId() = g.NextNetworkId
+				g.NextNetworkId++
+
+				for _, u := range connUpdatesOutputs {
+					u.SpawnEvents[*im.NetworkId()] = SpawnMissile
+				}
 			}
 		}
 	}
@@ -595,4 +603,19 @@ func spawnSpaceship(i *Iter) {
 	i.New()
 
 	*i.Sprite() = SpriteShip
+}
+
+func spawnMissile(i *Iter) {
+	i.Require(PosKey)
+	i.Require(RotKey)
+	i.Require(SpinKey)
+	i.Require(MomentumKey)
+	i.Require(SpriteKey)
+	i.Require(AffectedByGravityKey)
+	i.Require(TimedDestroyKey)
+	i.Require(NetworkIdKey)
+	i.New()
+
+	*i.Sprite() = SpriteMissile
+	*i.TimedDestroy() = 10
 }
