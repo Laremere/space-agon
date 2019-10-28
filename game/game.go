@@ -15,7 +15,6 @@
 package game
 
 import (
-	"log"
 	"math"
 	"math/rand"
 )
@@ -564,7 +563,7 @@ func (g *Game) Step(input *Input) {
 	}
 
 	{
-		i := g.E.Iter()
+		i := g.E.NewIter()
 		i.Require(BoundLocationKey)
 		i.Require(PosKey)
 		i.Require(MomentumKey)
