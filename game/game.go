@@ -338,6 +338,65 @@ func (g *Game) Step(input *Input) {
 		}
 	}
 
+	// Explosions cause more explosions
+	for {
+		newExplosions := [][2]Vec2(nil)
+		{
+			i := g.E.NewIter()
+			i.Require(PosKey)
+			i.Require(ExplosionDetailsKey)
+
+			for i.Next() {
+				if !i.ExplosionDetails().MoreExplosions {
+					i.ExplosionDetails().MoreExplosions = true
+					other := g.E.NewIter()
+					other.Require(PosKey)
+					other.Require(LookupKey)
+					other.Require(CanExplodeKey)
+					other.Require(NetworkTransmitKey)
+					for other.Next() {
+						if i.Lookup() == other.Lookup() {
+							continue
+						}
+						diff := i.Pos().Sub(*other.Pos())
+						if diff.Length() < 1 {
+							newExplosions = append(newExplosions, [2]Vec2{*other.Pos(), *other.Momentum()})
+							if other.NetworkId() != nil {
+								for _, u := range connUpdatesOutputs {
+									// log.Println("Sent destroy for ", *i.NetworkId())
+									u.DestroyEvents[*other.NetworkId()] = struct{}{}
+								}
+							}
+							other.Remove()
+							break
+						}
+					}
+
+				}
+			}
+		}
+
+		if len(newExplosions) == 0 {
+			break
+		}
+
+		for _, posMomentum := range newExplosions {
+			ie := g.E.NewIter()
+			ie.Require(NetworkTransmitKey)
+			ie.Require(TimedDestroyKey)
+			spawnExplosion(ie)
+			*ie.Pos() = posMomentum[0]
+			*ie.Momentum() = posMomentum[1]
+			*ie.NetworkId() = g.NextNetworkId
+			*ie.TimedDestroy() = 0.5
+			g.NextNetworkId++
+
+			for _, u := range connUpdatesOutputs {
+				u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
+			}
+		}
+	}
+
 	if input.IsRendered { // explosion fun :D
 		i := g.E.NewIter()
 		i.Require(PosKey)
@@ -474,6 +533,43 @@ func (g *Game) Step(input *Input) {
 		}
 	}
 
+	{ // Explode When colliding
+		i := g.E.NewIter()
+		i.Require(MissileDetailsKey)
+		i.Require(PosKey)
+		i.Require(LookupKey)
+		i.Require(NetworkTransmitKey)
+		for i.Next() {
+			other := g.E.NewIter()
+			other.Require(PosKey)
+			other.Require(LookupKey)
+			other.Require(CanExplodeKey)
+			for other.Next() {
+				if i.Lookup() == other.Lookup() || i.MissileDetails().Owner == other.Lookup() {
+					continue
+				}
+				diff := i.Pos().Sub(*other.Pos())
+				if diff.Length() < 0.5 {
+					ie := g.E.NewIter()
+					ie.Require(NetworkTransmitKey)
+					ie.Require(TimedDestroyKey)
+					spawnExplosion(ie)
+					*ie.Pos() = *i.Pos()
+					*ie.Momentum() = *i.Momentum()
+					*ie.NetworkId() = g.NextNetworkId
+					*ie.TimedDestroy() = 0.5
+					g.NextNetworkId++
+
+					for _, u := range connUpdatesOutputs {
+						u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
+					}
+					i.Remove()
+					break
+				}
+			}
+		}
+	}
+
 	{
 		i := g.E.NewIter()
 		i.Require(PosKey)
@@ -492,6 +588,7 @@ func (g *Game) Step(input *Input) {
 		i.Require(ShipControlKey)
 		i.Require(SpinKey)
 		i.Require(MomentumKey)
+		i.Require(LookupKey)
 		for i.Next() {
 			///////////////////////////
 			// Ship Movement Controls
@@ -550,6 +647,7 @@ func (g *Game) Step(input *Input) {
 				// im.Require(TimedDestroyKey)
 				im.Require(TimedExplodeKey)
 				spawnMissile(im)
+				im.MissileDetails().Owner = i.Lookup()
 				// *im.TimedDestroy() = 2
 				*im.TimedExplode() = 2
 				*im.Pos() = *i.Pos()
@@ -573,7 +671,7 @@ func (g *Game) Step(input *Input) {
 		i := g.E.NewIter()
 		i.Require(RotKey)
 		i.Require(MomentumKey)
-		i.Require(MissileKey)
+		i.Require(MissileDetailsKey)
 
 		for i.Next() {
 			const pushFactor = 10
@@ -584,7 +682,7 @@ func (g *Game) Step(input *Input) {
 	if input.IsRendered { // Spawn missile trail particles
 		i := g.E.NewIter()
 		i.Require(RotKey)
-		i.Require(MissileKey)
+		i.Require(MissileDetailsKey)
 		i.Require(PosKey)
 
 		ip := g.E.NewIter()
@@ -848,8 +946,9 @@ func spawnMissile(i *Iter) {
 	i.Require(SpriteKey)
 	i.Require(AffectedByGravityKey)
 	i.Require(NetworkIdKey)
-	i.Require(MissileKey)
+	i.Require(MissileDetailsKey)
 	i.Require(CanExplodeKey)
+	i.Require(LookupKey)
 	i.New()
 
 	*i.Sprite() = SpriteMissile

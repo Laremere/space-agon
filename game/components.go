@@ -47,6 +47,10 @@ func (v Vec2) Add(o Vec2) Vec2 {
 	return Vec2{v[0] + o[0], v[1] + o[1]}
 }
 
+func (v Vec2) Sub(o Vec2) Vec2 {
+	return Vec2{v[0] - o[0], v[1] - o[1]}
+}
+
 func (v *Vec2) AddEqual(o Vec2) {
 	(*v)[0] += o[0]
 	(*v)[1] += o[1]
@@ -78,7 +82,12 @@ type PlayerConnectedEvent struct {
 }
 
 type ExplosionDetails struct {
-	Initialized bool
+	Initialized    bool
+	MoreExplosions bool
+}
+
+type MissileDetails struct {
+	Owner *Lookup
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -205,6 +214,20 @@ func (c *ExplosionDetailsComp) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
 }
 
+type MissileDetailsComp []MissileDetails
+
+func (c *MissileDetailsComp) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *MissileDetailsComp) Extend(i int) {
+	*c = append(*c, MissileDetails{})
+}
+
+func (c *MissileDetailsComp) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -225,13 +248,13 @@ const (
 	SpawnEventKey
 	NetworkIdKey
 	ExplosionDetailsKey
+	MissileDetailsKey
 
 	// Section for keys which are only used as tags.
 	FrameEndDeleteKey
 	KeepInCameraKey
 	AffectedByGravityKey
 	PointRenderKey
-	MissileKey
 	BoundLocationKey
 	CanExplodeKey
 	ParticleSunDeleteKey
@@ -270,6 +293,7 @@ type EntityBag struct {
 	SpawnEvent       *SpawnTypeComp
 	NetworkId        *NetworkIdComp
 	ExplosionDetails *ExplosionDetailsComp
+	MissileDetails   *MissileDetailsComp
 }
 
 func newEntityBag(compsKey *compsKey) *EntityBag {
@@ -342,6 +366,11 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 	if inRequirement(compsKey, ExplosionDetailsKey) {
 		bag.ExplosionDetails = &ExplosionDetailsComp{}
 		bag.comps = append(bag.comps, bag.ExplosionDetails)
+	}
+
+	if inRequirement(compsKey, MissileDetailsKey) {
+		bag.MissileDetails = &MissileDetailsComp{}
+		bag.comps = append(bag.comps, bag.MissileDetails)
 	}
 
 	return bag
@@ -437,6 +466,14 @@ func (iter *Iter) NetworkId() *NetworkId {
 
 func (iter *Iter) ExplosionDetails() *ExplosionDetails {
 	comp := iter.e.bags[iter.i].ExplosionDetails
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) MissileDetails() *MissileDetails {
+	comp := iter.e.bags[iter.i].MissileDetails
 	if comp == nil {
 		return nil
 	}
