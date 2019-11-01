@@ -22,9 +22,11 @@ import (
 type Game struct {
 	E               *Entities
 	initialized     bool
-	ControlledShip  *Lookup
 	NextNetworkId   NetworkId
 	NewClientUpdate *NetworkUpdate // TODO: Actually send to server from clients on connect
+
+	ControlledShip *Lookup
+	timeDead       float32
 }
 
 func NewGame() *Game {
@@ -33,6 +35,8 @@ func NewGame() *Game {
 		// Oh man, this is such a bad hack.
 		NextNetworkId:   NetworkId(rand.Int63()),
 		NewClientUpdate: NewNetworkUpdate(),
+
+		timeDead: 100,
 	}
 
 	return g
@@ -74,7 +78,8 @@ type Input struct {
 	IsRendered bool
 	// Whether code which runs only if the input is going to control
 	// a player ship should run.
-	IsPlayer bool
+	IsPlayer    bool
+	IsConnected bool
 	// Whether the this instance is the host, if not it is a client.
 	IsHost bool
 	Conns  map[int]*NetworkConnection
@@ -269,32 +274,6 @@ func (g *Game) Step(input *Input) {
 	}
 
 	if !g.initialized {
-		if input.IsPlayer { // Spawn Spaceship
-			i := g.E.NewIter()
-			i.Require(NetworkTransmitKey)
-			// i.Require(NetworkPosTransmitKey)
-			// i.Require(NetworkRotTransmitKey)
-			// i.Require(NetworkMomentumTransmitKey)
-			// i.Require(NetworkSpinTransmitKey)
-			// i.Require(NetworkShipControlTransmitKey)
-			spawnSpaceship(i)
-
-			pos := i.Pos()
-			(*pos)[0] = 7
-			(*pos)[1] = 0
-			(*i.Momentum())[1] = 5
-			*i.Rot() = 0
-			*i.NetworkId() = g.NextNetworkId
-			g.NextNetworkId++
-
-			g.ControlledShip = i.Lookup()
-
-			for _, u := range connUpdatesOutputs {
-				u.SpawnEvents[*i.NetworkId()] = SpawnShip
-			}
-
-		}
-
 		if input.IsRendered { // spawn stars
 			{ // Big star
 				i := g.E.NewIter()
@@ -327,6 +306,38 @@ func (g *Game) Step(input *Input) {
 		g.initialized = true
 	}
 
+	if input.IsPlayer && input.IsConnected { // spawn/respawn
+		if !g.ControlledShip.Alive() {
+			g.timeDead += input.Dt
+
+			if g.timeDead > 4 {
+				g.timeDead = 0
+				i := g.E.NewIter()
+				i.Require(NetworkTransmitKey)
+				// i.Require(NetworkPosTransmitKey)
+				// i.Require(NetworkRotTransmitKey)
+				// i.Require(NetworkMomentumTransmitKey)
+				// i.Require(NetworkSpinTransmitKey)
+				// i.Require(NetworkShipControlTransmitKey)
+				spawnSpaceship(i)
+
+				pos := i.Pos()
+				(*pos)[0] = 7
+				(*pos)[1] = 0
+				(*i.Momentum())[1] = 5
+				*i.Rot() = 0
+				*i.NetworkId() = g.NextNetworkId
+				g.NextNetworkId++
+
+				g.ControlledShip = i.Lookup()
+
+				for _, u := range connUpdatesOutputs {
+					u.SpawnEvents[*i.NetworkId()] = SpawnShip
+				}
+			}
+		}
+	}
+
 	if input.IsRendered { // explosion fun :D
 		i := g.E.NewIter()
 		i.Require(PosKey)
@@ -338,6 +349,7 @@ func (g *Game) Step(input *Input) {
 		pi.Require(MomentumKey)
 		pi.Require(TimedDestroyKey)
 		pi.Require(PointRenderKey)
+		pi.Require(ParticleSunDeleteKey)
 
 		for i.Next() {
 			if !i.ExplosionDetails().Initialized {
@@ -424,6 +436,50 @@ func (g *Game) Step(input *Input) {
 						u.DestroyEvents[*i.NetworkId()] = struct{}{}
 					}
 				}
+				i.Remove()
+			}
+		}
+	}
+
+	{ // Explode in the sun
+		i := g.E.NewIter()
+		i.Require(CanExplodeKey)
+		i.Require(PosKey)
+		i.Require(NetworkTransmitKey)
+		for i.Next() {
+			if i.Pos().Length() < 3 {
+				ie := g.E.NewIter()
+				ie.Require(NetworkTransmitKey)
+				ie.Require(TimedDestroyKey)
+				spawnExplosion(ie)
+				*ie.Pos() = *i.Pos()
+				*ie.Momentum() = *i.Momentum()
+				*ie.NetworkId() = g.NextNetworkId
+				*ie.TimedDestroy() = 0.5
+				g.NextNetworkId++
+
+				for _, u := range connUpdatesOutputs {
+					u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
+				}
+
+				if i.NetworkId() != nil {
+					for _, u := range connUpdatesOutputs {
+						// log.Println("Sent destroy for ", *i.NetworkId())
+						u.DestroyEvents[*i.NetworkId()] = struct{}{}
+					}
+				}
+				i.Remove()
+				// println("ship alive: ", g.ControlledShip.Alive())
+			}
+		}
+	}
+
+	{
+		i := g.E.NewIter()
+		i.Require(PosKey)
+		i.Require(ParticleSunDeleteKey)
+		for i.Next() {
+			if i.Pos().Length() < 2.3 {
 				i.Remove()
 			}
 		}
@@ -536,6 +592,7 @@ func (g *Game) Step(input *Input) {
 		ip.Require(PointRenderKey)
 		ip.Require(MomentumKey)
 		ip.Require(TimedDestroyKey)
+		ip.Require(ParticleSunDeleteKey)
 
 		for i.Next() {
 			const pushFactor = 5
@@ -777,6 +834,7 @@ func spawnSpaceship(i *Iter) {
 	i.Require(AffectedByGravityKey)
 	i.Require(NetworkIdKey)
 	i.Require(BoundLocationKey)
+	i.Require(CanExplodeKey)
 	i.New()
 
 	*i.Sprite() = SpriteShip
@@ -791,6 +849,7 @@ func spawnMissile(i *Iter) {
 	i.Require(AffectedByGravityKey)
 	i.Require(NetworkIdKey)
 	i.Require(MissileKey)
+	i.Require(CanExplodeKey)
 	i.New()
 
 	*i.Sprite() = SpriteMissile

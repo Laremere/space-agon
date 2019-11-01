@@ -233,6 +233,8 @@ const (
 	PointRenderKey
 	MissileKey
 	BoundLocationKey
+	CanExplodeKey
+	ParticleSunDeleteKey
 
 	NetworkTransmitKey
 	// NetworkPosTransmitKey
@@ -464,6 +466,7 @@ func (e *EntityBag) Remove(i int) {
 	e.count--
 	for _, c := range e.comps {
 		c.Swap(e.count, i)
+		c.RemoveLast()
 	}
 }
 

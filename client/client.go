@@ -19,6 +19,7 @@ package main
 import (
 	"encoding/json"
 	"log"
+	"sync"
 	"syscall/js"
 
 	"github.com/googleforgames/space-agon/game"
@@ -75,9 +76,49 @@ func newClient() (*client, error) {
 		return nil
 	}))
 
+	log.Println("Initiating Graphics.")
+	gr, err := NewGraphics()
+	if err != nil {
+		return nil, err
+	}
+
+	c := &client{
+		gr:            gr,
+		g:             game.NewGame(),
+		inp:           inp,
+		lastTimestamp: js.Global().Get("performance").Call("now").Float(),
+	}
+
+	js.Global().Set("connectThis", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		addr := js.Global().Get("window").Get("location").Get("host").String()
+		c.connect(addr)
+		return nil
+	}))
+
+	return c, nil
+}
+
+type client struct {
+	gr            *graphics
+	g             *game.Game
+	inp           *game.Input
+	lastTimestamp float64
+	lock          sync.Mutex
+}
+
+func (c *client) connect(addr string) {
+	c.lock.Lock()
+	c.lock.Unlock()
+
+	for id, conn := range c.inp.Conns {
+		close(conn.Sending)
+		delete(c.inp.Conns, id)
+	}
+	c.g = game.NewGame()
+
 	serverConn := game.NewNetworkConnection()
-	inp.Conns[0] = serverConn
-	ws := js.Global().Get("WebSocket").New("ws://" + js.Global().Get("window").Get("location").Get("host").String() + "/connect/")
+	c.inp.Conns[0] = serverConn
+	ws := js.Global().Get("WebSocket").New("ws://" + addr + "/connect/")
 
 	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		go func() {
@@ -118,29 +159,13 @@ func newClient() (*client, error) {
 		return nil
 	}))
 
-	log.Println("Initiating Graphics.")
-	gr, err := NewGraphics()
-	if err != nil {
-		return nil, err
-	}
-
-	return &client{
-		gr:            gr,
-		g:             game.NewGame(),
-		inp:           inp,
-		lastTimestamp: js.Global().Get("performance").Call("now").Float(),
-	}, nil
-}
-
-type client struct {
-	gr            *graphics
-	g             *game.Game
-	inp           *game.Input
-	lastTimestamp float64
+	c.inp.IsConnected = true
 }
 
 func (c *client) scheduleFrame() {
 	js.Global().Get("window").Call("requestAnimationFrame", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		c.lock.Lock()
+		defer c.lock.Unlock()
 		now := args[0].Float()
 		c.inp.Dt = float32((now - c.lastTimestamp) / 1000)
 		c.lastTimestamp = now

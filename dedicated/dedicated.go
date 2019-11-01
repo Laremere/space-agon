@@ -37,6 +37,7 @@ func Start() websocket.Handler {
 	d.nextId <- 0
 
 	go func() {
+		time.Sleep(15 * time.Second)
 		last := time.Now()
 		for t := range time.Tick(time.Second / 60) {
 			d.lock.Lock()
