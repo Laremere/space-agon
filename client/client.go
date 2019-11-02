@@ -95,6 +95,12 @@ func newClient() (*client, error) {
 		return nil
 	}))
 
+	js.Global().Set("connect", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		addr := args[0].String()
+		c.connect(addr)
+		return nil
+	}))
+
 	return c, nil
 }
 

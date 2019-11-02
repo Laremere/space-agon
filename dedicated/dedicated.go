@@ -12,17 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dedicated
+package main
 
 import (
 	"context"
 	"encoding/json"
-	"github.com/googleforgames/space-agon/game"
-	"golang.org/x/net/websocket"
+	"fmt"
+	"html"
 	"log"
+	"net/http"
 	"sync"
 	"time"
+
+	agones "agones.dev/agones/sdks/go"
+	"github.com/googleforgames/space-agon/game"
+	"golang.org/x/net/websocket"
 )
+
+func main() {
+	a, err := agones.NewSDK()
+	if err != nil {
+		log.Fatal(err)
+	}
+	go func() {
+		time.Sleep(3)
+		a.Ready()
+		for range time.Tick(time.Second) {
+			a.Health()
+		}
+	}()
+
+	http.Handle("/connect/", Start())
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
+	})
+
+	log.Println("Starting dedicated server")
+	log.Fatal(http.ListenAndServe(":2156", nil))
+}
 
 func Start() websocket.Handler {
 	d := &dedicated{
