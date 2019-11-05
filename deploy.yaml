@@ -12,6 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+###############################################
+# Client Frontend
+###############################################
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -28,7 +32,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: gcr.io/sredig-gaming-test/space-agon-frontend:v4
+        image: gcr.io/sredig-gaming-test/space-agon-frontend:INDEV-20191104-182231
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -48,3 +52,147 @@ spec:
   selector:
     run: frontend
   type: LoadBalancer
+
+---
+
+###############################################
+# Dedicated Servers
+###############################################
+
+apiVersion: "agones.dev/v1"
+kind: Fleet
+metadata:
+  name: dedicated
+spec:
+  replicas: 2
+  template:
+    spec:
+      ports:
+      - name: default
+        portPolicy: Dynamic
+        containerPort: 2156
+        protocol: TCP
+      template:
+        spec:
+          containers:
+          - name: dedicated
+            image: gcr.io/sredig-gaming-test/space-agon-dedicated:INDEV-20191104-182231
+            imagePullPolicy: Always
+            resources:
+              requests:
+                memory: "200Mi"
+                cpu: "500m"
+              limits:
+                memory: "200Mi"
+                cpu: "500m"
+
+---
+
+apiVersion: "autoscaling.agones.dev/v1"
+kind: FleetAutoscaler
+metadata:
+  name: dedicated-autoscaler
+spec:
+  fleetName: dedicated
+  policy:
+    type: Buffer
+    buffer:
+      bufferSize: 2
+      minReplicas: 0
+      maxReplicas: 50
+
+---
+
+###############################################
+# Open Match Configuration (note namespace)
+###############################################
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: om-configmap-override
+  namespace: open-match
+  labels:
+    app: open-match
+    component: config
+    release: open-match
+data:
+  matchmaker_config_override.yaml: |-
+    api:
+      evaluator:
+        hostname: "om-evaluator"
+        grpcport: "50508"
+        httpport: "51508"
+    synchronizer:
+      enabled: true
+      registrationIntervalMs: 3000ms
+      proposalCollectionIntervalMs: 2000ms
+    logging:
+      rpc: true
+
+---
+
+###############################################
+# Director
+###############################################
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: director
+spec:
+  selector:
+    matchLabels:
+      run: director
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        run: director
+    spec:
+      containers:
+      - name: director
+        image: gcr.io/sredig-gaming-test/space-agon-director:INDEV-20191104-182231
+        imagePullPolicy: Always
+
+---
+
+###############################################
+# Match Making Function
+###############################################
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mmf
+spec:
+  selector:
+    matchLabels:
+      run: mmf
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        run: mmf
+    spec:
+      containers:
+      - name: mmf
+        image: gcr.io/sredig-gaming-test/space-agon-mmf:INDEV-20191104-182231
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 50502
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: mmf
+  labels:
+    run: mmf
+spec:
+  ports:
+  - port: 50502
+    protocol: TCP
+  selector:
+    run: mmf
