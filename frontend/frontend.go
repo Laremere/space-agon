@@ -32,8 +32,6 @@ func main() {
 		}
 	})
 
-	// http.Handle("/connect/", dedicated.Start())
-
 	log.Println("Starting server")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
