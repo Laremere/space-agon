@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	agonesSdk "agones.dev/agones/pkg/sdk"
 	agones "agones.dev/agones/sdks/go"
 	"github.com/googleforgames/space-agon/game"
 	"golang.org/x/net/websocket"
@@ -42,7 +43,7 @@ func main() {
 		}
 	}()
 
-	http.Handle("/connect/", Start())
+	http.Handle("/connect/", Start(a))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
@@ -52,11 +53,12 @@ func main() {
 	log.Fatal(http.ListenAndServe(":2156", nil))
 }
 
-func Start() websocket.Handler {
+func Start(a *agones.SDK) websocket.Handler {
 	d := &dedicated{
 		g:      game.NewGame(),
 		nextId: make(chan int, 1),
 		inp:    game.NewInput(),
+		a:      a,
 	}
 	d.inp.IsRendered = false
 	d.inp.IsPlayer = false
@@ -75,6 +77,8 @@ func Start() websocket.Handler {
 		}
 	}()
 
+	a.WatchGameServer(d.watchGameServer)
+
 	return d.Handler
 }
 
@@ -87,9 +91,16 @@ type dedicated struct {
 	sendChannel map[int]chan byte
 
 	nextId chan int
+
+	a                 *agones.SDK
+	shutdown          sync.Once
+	waitForDisconnect sync.WaitGroup
 }
 
 func (d *dedicated) Handler(c *websocket.Conn) {
+	d.waitForDisconnect.Add(1)
+	defer d.waitForDisconnect.Done()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	n := game.NewNetworkConnection()
 
@@ -137,4 +148,16 @@ func (d *dedicated) Handler(c *websocket.Conn) {
 	}()
 
 	<-ctx.Done()
+}
+
+func (d *dedicated) watchGameServer(gs *agonesSdk.GameServer) {
+	if gs.GetStatus().GetState() == "Allocated" {
+		d.shutdown.Do(func() {
+			log.Println("Detected the server is allocated.")
+			time.Sleep(time.Second * 15)
+			log.Println("Waiting for players to disconnect then shutting down.")
+			d.waitForDisconnect.Wait()
+			d.a.Shutdown()
+		})
+	}
 }

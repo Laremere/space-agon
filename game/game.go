@@ -721,10 +721,14 @@ func (g *Game) Step(input *Input) {
 		i := g.E.NewIter()
 		i.Require(BoundLocationKey)
 		i.Require(PosKey)
-		i.Require(MomentumKey)
+		// i.Require(MomentumKey)
 
 		for i.Next() {
-			// TODO: Slow ships too far away from going further
+			l := i.Pos().Length()
+			if l > 50 {
+				scale := 50 / l
+				*i.Pos() = i.Pos().Scale(scale)
+			}
 		}
 	}
 
