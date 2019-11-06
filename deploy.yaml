@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: gcr.io/sredig-gaming-test/space-agon-frontend:INDEV-20191104-182231
+        image: gcr.io/sredig-gaming-test/space-agon-frontend:INDEV-20191105-154836
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -76,7 +76,7 @@ spec:
         spec:
           containers:
           - name: dedicated
-            image: gcr.io/sredig-gaming-test/space-agon-dedicated:INDEV-20191104-182231
+            image: gcr.io/sredig-gaming-test/space-agon-dedicated:INDEV-20191105-154836
             imagePullPolicy: Always
             resources:
               requests:
@@ -150,10 +150,56 @@ spec:
       labels:
         run: director
     spec:
+      serviceAccount: fleet-allocator
       containers:
       - name: director
-        image: gcr.io/sredig-gaming-test/space-agon-director:INDEV-20191104-182231
+        image: gcr.io/sredig-gaming-test/space-agon-director:INDEV-20191105-154836
         imagePullPolicy: Always
+
+---
+
+# Create a Role in the default namespace that grants access to the agones api
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fleet-allocator
+  labels:
+    app: fleet-allocator
+rules:
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create"]
+- apiGroups: ["allocation.agones.dev"]
+  resources: ["gameserverallocations"]
+  verbs: ["create"]
+- apiGroups: ["agones.dev"]
+  resources: ["fleets"]
+  verbs: ["get"]
+
+---
+# Create a ServiceAccount that will be bound to the above role
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fleet-allocator
+  labels:
+    app: fleet-allocator
+
+---
+# Bind the fleet-allocator ServiceAccount to the fleet-allocator Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fleet-allocator
+  labels:
+    app: fleet-allocator
+subjects:
+- kind: ServiceAccount
+  name: fleet-allocator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fleet-allocator
 
 ---
 
@@ -177,7 +223,7 @@ spec:
     spec:
       containers:
       - name: mmf
-        image: gcr.io/sredig-gaming-test/space-agon-mmf:INDEV-20191104-182231
+        image: gcr.io/sredig-gaming-test/space-agon-mmf:INDEV-20191105-154836
         imagePullPolicy: Always
         ports:
         - containerPort: 50502

@@ -22,7 +22,10 @@ import (
 	"sync"
 	"syscall/js"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/googleforgames/space-agon/game"
+	"google.golang.org/grpc/status"
+	"open-match.dev/open-match/pkg/pb"
 )
 
 func main() {
@@ -92,6 +95,11 @@ func newClient() (*client, error) {
 	js.Global().Set("connectThis", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		addr := js.Global().Get("window").Get("location").Get("host").String()
 		c.connect(addr)
+		return nil
+	}))
+
+	js.Global().Set("matchmake", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		c.matchmake()
 		return nil
 	}))
 
@@ -166,6 +174,51 @@ func (c *client) connect(addr string) {
 	}))
 
 	c.inp.IsConnected = true
+}
+
+func (c *client) matchmake() {
+	addr := js.Global().Get("window").Get("location").Get("host").String()
+	ws := js.Global().Get("WebSocket").New("ws://" + addr + "/matchmake/")
+
+	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Matchmaking Websocket onopen!", args[0].Get("toString"))
+		return nil
+	}))
+
+	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Matchmaking Websocket onmessage!")
+
+		a := &pb.Assignment{}
+		err := proto.Unmarshal([]byte(args[0].Get("data").String()), a)
+		if err != nil {
+			log.Println("Error Unmarshaling assignment:", err)
+			return nil
+		}
+
+		if a.Error != nil {
+			err := status.FromProto(a.Error).Err()
+			if err != nil {
+				log.Println("Error on assignment:", err)
+				return nil
+			}
+		}
+
+		if a.Connection != "" {
+			ws.Call("close")
+			c.connect(a.Connection)
+		}
+		return nil
+	}))
+
+	ws.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Matchmaking Websocket error!", args[0].Call("toString"))
+		return nil
+	}))
+
+	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Matchmaking Websocket closed!", args[0].Call("toString"))
+		return nil
+	}))
 }
 
 func (c *client) scheduleFrame() {
@@ -263,3 +316,76 @@ func (c *client) frame() {
 
 	c.scheduleFrame()
 }
+
+type WrappedWebSocket struct {
+	open     chan struct{}
+	closed   chan struct{}
+	hasError chan struct{}
+	messages chan []byte
+	err      error
+}
+
+// func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
+// 	w := &WrappedWebSocket{
+// 		open:   make(chan struct{}),
+// 		closed: make(chan struct{}),
+// 		hasErr: make(chan struct{}),
+// 	}
+
+// 	ws := js.Global().Get("WebSocket").New(addr)
+
+// 	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+// 		close(w.open)
+// 		// go func() {
+// 		// 	log.Println("Websocket onopen!", args[0].Get("toString"))
+
+// 		// 	for toSend := range serverConn.Sending {
+// 		// 		b, err := json.Marshal(toSend)
+// 		// 		if err != nil {
+// 		// 			log.Printf("Sending had Marshal error %v", err)
+// 		// 			return
+// 		// 		}
+// 		// 		ws.Call("send", string(b))
+// 		// 	}
+// 		// }()
+// 		return nil
+// 	}))
+
+// 	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+// 		// // log.Println("Websocket onmessage!", args[0].Get("data").String())
+
+// 		// v := game.NewNetworkUpdate()
+// 		// err := json.Unmarshal([]byte(args[0].Get("data").String()), v)
+// 		// if err != nil {
+// 		// 	log.Printf("Recieving had Unmarshal error %v", err)
+// 		// 	return nil
+// 		// }
+// 		// game.NetworkUpdateCombineAndPass(serverConn.Recieving, v)
+// 		return nil
+// 	}))
+
+// 	ws.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+// 		// log.Println("Websocket error!", args[0].Call("toString"))
+// 		return nil
+// 	}))
+
+// 	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+// 		// log.Println("Websocket closed!", args[0].Call("toString"))
+// 		return nil
+// 	}))
+
+// 	switch {
+// 	case <-w.open:
+// 		return w, nil
+// 	case <-w.hasErr:
+// 		return nil, w.err
+// 	}
+// }
+
+// func (w *WrappedWebSocket) Send(b []byte) error {
+
+// }
+
+// func (w *WrappedWebSocket) Recv() ([]byte, error) {
+
+// }
