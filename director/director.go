@@ -35,7 +35,7 @@ import (
 
 func main() {
 	log.Println("Starting Director")
-	for range time.Tick(time.Second * 5) {
+	for range time.Tick(time.Second) {
 		if err := run(); err != nil {
 			log.Println("Error running director:", err.Error())
 		}

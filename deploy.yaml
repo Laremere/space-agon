@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: gcr.io/sredig-gaming-test/space-agon-frontend:INDEV-20191105-154836
+        image: gcr.io/sredig-gaming-test/space-agon-frontend:INDEV-20191105-175730
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -47,7 +47,8 @@ metadata:
     run: frontend
 spec:
   ports:
-  - port: 8080
+  - port: 80
+    targetPort: 8080
     protocol: TCP
   selector:
     run: frontend
@@ -76,7 +77,7 @@ spec:
         spec:
           containers:
           - name: dedicated
-            image: gcr.io/sredig-gaming-test/space-agon-dedicated:INDEV-20191105-154836
+            image: gcr.io/sredig-gaming-test/space-agon-dedicated:INDEV-20191105-175730
             imagePullPolicy: Always
             resources:
               requests:
@@ -125,8 +126,8 @@ data:
         httpport: "51508"
     synchronizer:
       enabled: true
-      registrationIntervalMs: 3000ms
-      proposalCollectionIntervalMs: 2000ms
+      registrationIntervalMs: 250ms
+      proposalCollectionIntervalMs: 500ms
     logging:
       rpc: true
 
@@ -153,7 +154,7 @@ spec:
       serviceAccount: fleet-allocator
       containers:
       - name: director
-        image: gcr.io/sredig-gaming-test/space-agon-director:INDEV-20191105-154836
+        image: gcr.io/sredig-gaming-test/space-agon-director:INDEV-20191105-175730
         imagePullPolicy: Always
 
 ---
@@ -223,7 +224,7 @@ spec:
     spec:
       containers:
       - name: mmf
-        image: gcr.io/sredig-gaming-test/space-agon-mmf:INDEV-20191105-154836
+        image: gcr.io/sredig-gaming-test/space-agon-mmf:INDEV-20191105-175730
         imagePullPolicy: Always
         ports:
         - containerPort: 50502
