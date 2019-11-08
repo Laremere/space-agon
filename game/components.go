@@ -12,266 +12,179 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// THIS FILE IS GENERATED, DO NOT EDIT
+// If you want to define new components, edit game/generation/generation.go
+// Then run: go generate github.com/googleforgames/space-agon/game/generation
+
 package game
 
-import "math"
+// Lookup has a special implementation which keeps track of how it is moved,
+// just include it manually here.
+type comp_Lookup []*Lookup
 
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-// Component types
-////////////////////////////////////////////////////////////////////////////////
-
-type Sprite uint16
-
-const (
-	SpriteUnset = Sprite(iota)
-	SpriteShip
-	SpriteMissile
-	SpriteStar
-	SpriteStarBit
-)
-
-type Vec2 [2]float32
-
-func Vec2FromRadians(rad float32) Vec2 {
-	sin, cos := math.Sincos(float64(rad))
-	return Vec2{float32(cos), float32(sin)}
-}
-
-func (v Vec2) Scale(s float32) Vec2 {
-	return Vec2{v[0] * s, v[1] * s}
-}
-
-func (v Vec2) Add(o Vec2) Vec2 {
-	return Vec2{v[0] + o[0], v[1] + o[1]}
-}
-
-func (v Vec2) Sub(o Vec2) Vec2 {
-	return Vec2{v[0] - o[0], v[1] - o[1]}
-}
-
-func (v *Vec2) AddEqual(o Vec2) {
-	(*v)[0] += o[0]
-	(*v)[1] += o[1]
-}
-
-func (v *Vec2) Length() float32 {
-	x := (*v)[0]
-	y := (*v)[1]
-	return float32(math.Sqrt(float64(x*x + y*y)))
-}
-
-type Lookup [2]int
-
-func (l *Lookup) Alive() bool {
-	return l != nil && (*l)[0] >= 0
-}
-
-type ShipControl struct {
-	Up           bool
-	Down         bool
-	Left         bool
-	Right        bool
-	Fire         bool
-	FireCoolDown float32
-}
-
-// TODO: Use?
-type PlayerConnectedEvent struct {
-}
-
-type ExplosionDetails struct {
-	Initialized    bool
-	MoreExplosions bool
-}
-
-type MissileDetails struct {
-	Owner *Lookup
-}
-
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-// Comp definitions, add for each new type of component.
-////////////////////////////////////////////////////////////////////////////////
-
-type Vec2Comp []Vec2
-
-func (c *Vec2Comp) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *Vec2Comp) Extend(i int) {
-	*c = append(*c, Vec2{})
-}
-
-func (c *Vec2Comp) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
-type SpriteComp []Sprite
-
-func (c *SpriteComp) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *SpriteComp) Extend(i int) {
-	*c = append(*c, SpriteUnset)
-}
-
-func (c *SpriteComp) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
-type FloatComp []float32
-
-func (c *FloatComp) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *FloatComp) Extend(i int) {
-	*c = append(*c, 0)
-}
-
-func (c *FloatComp) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
-type LookupComp []*Lookup
-
-func (c *LookupComp) Swap(j1, j2 int) {
+func (c *comp_Lookup) Swap(j1, j2 int) {
 	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
 	(*c)[j1][1] = j1
 	(*c)[j2][1] = j2
 }
 
-func (c *LookupComp) Extend(i int) {
+func (c *comp_Lookup) Extend(i int) {
 	j := len(*c)
 	*c = append(*c, &Lookup{i, j})
 }
 
-func (c *LookupComp) RemoveLast() {
+func (c *comp_Lookup) RemoveLast() {
 	j := len(*c) - 1
 	(*c)[j][0] = -2
 	(*c)[j][1] = -3
 	*c = (*c)[:j]
 }
 
-type ShipControlComp []ShipControl
+type comp_ExplosionDetails []ExplosionDetails
 
-func (c *ShipControlComp) Swap(j1, j2 int) {
+func (c *comp_ExplosionDetails) Swap(j1, j2 int) {
 	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
 }
 
-func (c *ShipControlComp) Extend(i int) {
-	*c = append(*c, ShipControl{})
-}
-
-func (c *ShipControlComp) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
-type SpawnTypeComp []SpawnType
-
-func (c *SpawnTypeComp) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *SpawnTypeComp) Extend(i int) {
-	*c = append(*c, 0)
-}
-
-func (c *SpawnTypeComp) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
-type NetworkIdComp []NetworkId
-
-func (c *NetworkIdComp) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *NetworkIdComp) Extend(i int) {
-	*c = append(*c, 0)
-}
-
-func (c *NetworkIdComp) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
-type ExplosionDetailsComp []ExplosionDetails
-
-func (c *ExplosionDetailsComp) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *ExplosionDetailsComp) Extend(i int) {
+func (c *comp_ExplosionDetails) Extend(i int) {
 	*c = append(*c, ExplosionDetails{Initialized: false})
 }
 
-func (c *ExplosionDetailsComp) RemoveLast() {
+func (c *comp_ExplosionDetails) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
 }
 
-type MissileDetailsComp []MissileDetails
+type comp_MissileDetails []MissileDetails
 
-func (c *MissileDetailsComp) Swap(j1, j2 int) {
+func (c *comp_MissileDetails) Swap(j1, j2 int) {
 	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
 }
 
-func (c *MissileDetailsComp) Extend(i int) {
+func (c *comp_MissileDetails) Extend(i int) {
 	*c = append(*c, MissileDetails{})
 }
 
-func (c *MissileDetailsComp) RemoveLast() {
+func (c *comp_MissileDetails) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
 }
 
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-// Pieces that need to be updated for each new component.
-////////////////////////////////////////////////////////////////////////////////
+type comp_NetworkId []NetworkId
+
+func (c *comp_NetworkId) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *comp_NetworkId) Extend(i int) {
+	*c = append(*c, 0)
+}
+
+func (c *comp_NetworkId) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
+type comp_ShipControl []ShipControl
+
+func (c *comp_ShipControl) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *comp_ShipControl) Extend(i int) {
+	*c = append(*c, ShipControl{})
+}
+
+func (c *comp_ShipControl) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
+type comp_SpawnType []SpawnType
+
+func (c *comp_SpawnType) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *comp_SpawnType) Extend(i int) {
+	*c = append(*c, 0)
+}
+
+func (c *comp_SpawnType) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
+type comp_Sprite []Sprite
+
+func (c *comp_Sprite) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *comp_Sprite) Extend(i int) {
+	*c = append(*c, SpriteUnset)
+}
+
+func (c *comp_Sprite) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
+type comp_Vec2 []Vec2
+
+func (c *comp_Vec2) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *comp_Vec2) Extend(i int) {
+	*c = append(*c, Vec2{})
+}
+
+func (c *comp_Vec2) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
+type comp_float32 []float32
+
+func (c *comp_float32) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *comp_float32) Extend(i int) {
+	*c = append(*c, 0)
+}
+
+func (c *comp_float32) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
 
 const (
-	// Section for keys associated with a component.
-	PosKey = CompKey(iota)
-	SpriteKey
-	RotKey
-	TimedDestroyKey
-	TimedExplodeKey
-	MomentumKey
-	SpinKey
-	LookupKey
-	ShipControlKey
-	SpawnEventKey
-	NetworkIdKey
-	ExplosionDetailsKey
-	MissileDetailsKey
-
-	// Section for keys which are only used as tags.
-	FrameEndDeleteKey
-	KeepInCameraKey
-	AffectedByGravityKey
-	PointRenderKey
-	BoundLocationKey
-	CanExplodeKey
-	ParticleSunDeleteKey
-
-	NetworkTransmitKey
-	// NetworkPosTransmitKey
-	// NetworkRotTransmitKey
-	// NetworkMomentumTransmitKey
-	// NetworkSpinTransmitKey
-	// NetworkShipControlTransmitKey
-
-	NetworkRecieveKey
-	// NetworkPosRecieveKey
-	// NetworkRotRecieveKey
-	// NetworkMomentumRecieveKey
-	// NetworkSpinRecieveKey
-	// NetworkShipControlRecieveKey
+	AffectedByGravityKey = CompKey(iota)
+	BoundLocationKey     = CompKey(iota)
+	CanExplodeKey        = CompKey(iota)
+	ExplosionDetailsKey  = CompKey(iota)
+	FrameEndDeleteKey    = CompKey(iota)
+	KeepInCameraKey      = CompKey(iota)
+	LookupKey            = CompKey(iota)
+	MissileDetailsKey    = CompKey(iota)
+	MomentumKey          = CompKey(iota)
+	NetworkIdKey         = CompKey(iota)
+	NetworkRecieveKey    = CompKey(iota)
+	NetworkTransmitKey   = CompKey(iota)
+	ParticleSunDeleteKey = CompKey(iota)
+	PointRenderKey       = CompKey(iota)
+	PosKey               = CompKey(iota)
+	RotKey               = CompKey(iota)
+	ShipControlKey       = CompKey(iota)
+	SpawnEventKey        = CompKey(iota)
+	SpinKey              = CompKey(iota)
+	SpriteKey            = CompKey(iota)
+	TimedDestroyKey      = CompKey(iota)
+	TimedExplodeKey      = CompKey(iota)
 
 	doNotMoveOrUseLastKeyForNumberOfKeys
 )
@@ -281,19 +194,19 @@ type EntityBag struct {
 	comps    []Comp
 	compsKey compsKey
 
-	Pos              *Vec2Comp
-	Sprite           *SpriteComp
-	Rot              *FloatComp
-	TimedDestroy     *FloatComp
-	TimedExplode     *FloatComp
-	Momentum         *Vec2Comp
-	Spin             *FloatComp
-	Lookup           *LookupComp
-	ShipControl      *ShipControlComp
-	SpawnEvent       *SpawnTypeComp
-	NetworkId        *NetworkIdComp
-	ExplosionDetails *ExplosionDetailsComp
-	MissileDetails   *MissileDetailsComp
+	ExplosionDetails *comp_ExplosionDetails
+	Lookup           *comp_Lookup
+	MissileDetails   *comp_MissileDetails
+	Momentum         *comp_Vec2
+	NetworkId        *comp_NetworkId
+	Pos              *comp_Vec2
+	Rot              *comp_float32
+	ShipControl      *comp_ShipControl
+	SpawnEvent       *comp_SpawnType
+	Spin             *comp_float32
+	Sprite           *comp_Sprite
+	TimedDestroy     *comp_float32
+	TimedExplode     *comp_float32
 }
 
 func newEntityBag(compsKey *compsKey) *EntityBag {
@@ -303,77 +216,112 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 		compsKey: *compsKey,
 	}
 
-	if inRequirement(compsKey, PosKey) {
-		bag.Pos = &Vec2Comp{}
-		bag.comps = append(bag.comps, bag.Pos)
-	}
-
-	if inRequirement(compsKey, SpriteKey) {
-		bag.Sprite = &SpriteComp{}
-		bag.comps = append(bag.comps, bag.Sprite)
-	}
-
-	if inRequirement(compsKey, RotKey) {
-		bag.Rot = &FloatComp{}
-		bag.comps = append(bag.comps, bag.Rot)
-	}
-
-	if inRequirement(compsKey, TimedDestroyKey) {
-		bag.TimedDestroy = &FloatComp{}
-		bag.comps = append(bag.comps, bag.TimedDestroy)
-	}
-
-	if inRequirement(compsKey, TimedDestroyKey) {
-		bag.TimedDestroy = &FloatComp{}
-		bag.comps = append(bag.comps, bag.TimedDestroy)
-	}
-
-	if inRequirement(compsKey, TimedExplodeKey) {
-		bag.TimedExplode = &FloatComp{}
-		bag.comps = append(bag.comps, bag.TimedExplode)
-	}
-
-	if inRequirement(compsKey, MomentumKey) {
-		bag.Momentum = &Vec2Comp{}
-		bag.comps = append(bag.comps, bag.Momentum)
-	}
-
-	if inRequirement(compsKey, SpinKey) {
-		bag.Spin = &FloatComp{}
-		bag.comps = append(bag.comps, bag.Spin)
+	if inRequirement(compsKey, ExplosionDetailsKey) {
+		bag.ExplosionDetails = &comp_ExplosionDetails{}
+		bag.comps = append(bag.comps, bag.ExplosionDetails)
 	}
 
 	if inRequirement(compsKey, LookupKey) {
-		bag.Lookup = &LookupComp{}
+		bag.Lookup = &comp_Lookup{}
 		bag.comps = append(bag.comps, bag.Lookup)
 	}
 
+	if inRequirement(compsKey, MissileDetailsKey) {
+		bag.MissileDetails = &comp_MissileDetails{}
+		bag.comps = append(bag.comps, bag.MissileDetails)
+	}
+
+	if inRequirement(compsKey, MomentumKey) {
+		bag.Momentum = &comp_Vec2{}
+		bag.comps = append(bag.comps, bag.Momentum)
+	}
+
+	if inRequirement(compsKey, NetworkIdKey) {
+		bag.NetworkId = &comp_NetworkId{}
+		bag.comps = append(bag.comps, bag.NetworkId)
+	}
+
+	if inRequirement(compsKey, PosKey) {
+		bag.Pos = &comp_Vec2{}
+		bag.comps = append(bag.comps, bag.Pos)
+	}
+
+	if inRequirement(compsKey, RotKey) {
+		bag.Rot = &comp_float32{}
+		bag.comps = append(bag.comps, bag.Rot)
+	}
+
 	if inRequirement(compsKey, ShipControlKey) {
-		bag.ShipControl = &ShipControlComp{}
+		bag.ShipControl = &comp_ShipControl{}
 		bag.comps = append(bag.comps, bag.ShipControl)
 	}
 
 	if inRequirement(compsKey, SpawnEventKey) {
-		bag.SpawnEvent = &SpawnTypeComp{}
+		bag.SpawnEvent = &comp_SpawnType{}
 		bag.comps = append(bag.comps, bag.SpawnEvent)
 	}
 
-	if inRequirement(compsKey, NetworkIdKey) {
-		bag.NetworkId = &NetworkIdComp{}
-		bag.comps = append(bag.comps, bag.NetworkId)
+	if inRequirement(compsKey, SpinKey) {
+		bag.Spin = &comp_float32{}
+		bag.comps = append(bag.comps, bag.Spin)
 	}
 
-	if inRequirement(compsKey, ExplosionDetailsKey) {
-		bag.ExplosionDetails = &ExplosionDetailsComp{}
-		bag.comps = append(bag.comps, bag.ExplosionDetails)
+	if inRequirement(compsKey, SpriteKey) {
+		bag.Sprite = &comp_Sprite{}
+		bag.comps = append(bag.comps, bag.Sprite)
 	}
 
-	if inRequirement(compsKey, MissileDetailsKey) {
-		bag.MissileDetails = &MissileDetailsComp{}
-		bag.comps = append(bag.comps, bag.MissileDetails)
+	if inRequirement(compsKey, TimedDestroyKey) {
+		bag.TimedDestroy = &comp_float32{}
+		bag.comps = append(bag.comps, bag.TimedDestroy)
+	}
+
+	if inRequirement(compsKey, TimedExplodeKey) {
+		bag.TimedExplode = &comp_float32{}
+		bag.comps = append(bag.comps, bag.TimedExplode)
 	}
 
 	return bag
+}
+
+func (iter *Iter) ExplosionDetails() *ExplosionDetails {
+	comp := iter.e.bags[iter.i].ExplosionDetails
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) Lookup() *Lookup {
+	comp := iter.e.bags[iter.i].Lookup
+	if comp == nil {
+		return nil
+	}
+	return (*comp)[iter.j]
+}
+
+func (iter *Iter) MissileDetails() *MissileDetails {
+	comp := iter.e.bags[iter.i].MissileDetails
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) Momentum() *Vec2 {
+	comp := iter.e.bags[iter.i].Momentum
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) NetworkId() *NetworkId {
+	comp := iter.e.bags[iter.i].NetworkId
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
 }
 
 func (iter *Iter) Pos() *Vec2 {
@@ -384,16 +332,40 @@ func (iter *Iter) Pos() *Vec2 {
 	return &(*comp)[iter.j]
 }
 
-func (iter *Iter) Sprite() *Sprite {
-	comp := iter.e.bags[iter.i].Sprite
+func (iter *Iter) Rot() *float32 {
+	comp := iter.e.bags[iter.i].Rot
 	if comp == nil {
 		return nil
 	}
 	return &(*comp)[iter.j]
 }
 
-func (iter *Iter) Rot() *float32 {
-	comp := iter.e.bags[iter.i].Rot
+func (iter *Iter) ShipControl() *ShipControl {
+	comp := iter.e.bags[iter.i].ShipControl
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) SpawnEvent() *SpawnType {
+	comp := iter.e.bags[iter.i].SpawnEvent
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) Spin() *float32 {
+	comp := iter.e.bags[iter.i].Spin
+	if comp == nil {
+		return nil
+	}
+	return &(*comp)[iter.j]
+}
+
+func (iter *Iter) Sprite() *Sprite {
+	comp := iter.e.bags[iter.i].Sprite
 	if comp == nil {
 		return nil
 	}
@@ -415,76 +387,6 @@ func (iter *Iter) TimedExplode() *float32 {
 	}
 	return &(*comp)[iter.j]
 }
-
-func (iter *Iter) Momentum() *Vec2 {
-	comp := iter.e.bags[iter.i].Momentum
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
-}
-
-func (iter *Iter) Spin() *float32 {
-	comp := iter.e.bags[iter.i].Spin
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
-}
-
-func (iter *Iter) Lookup() *Lookup {
-	comp := iter.e.bags[iter.i].Lookup
-	if comp == nil {
-		return nil
-	}
-	return (*comp)[iter.j]
-}
-
-func (iter *Iter) ShipControl() *ShipControl {
-	comp := iter.e.bags[iter.i].ShipControl
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
-}
-
-func (iter *Iter) SpawnEvent() *SpawnType {
-	comp := iter.e.bags[iter.i].SpawnEvent
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
-}
-
-func (iter *Iter) NetworkId() *NetworkId {
-	comp := iter.e.bags[iter.i].NetworkId
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
-}
-
-func (iter *Iter) ExplosionDetails() *ExplosionDetails {
-	comp := iter.e.bags[iter.i].ExplosionDetails
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
-}
-
-func (iter *Iter) MissileDetails() *MissileDetails {
-	comp := iter.e.bags[iter.i].MissileDetails
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
-}
-
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////
-// Pieces that shouldn't change due to new components.
-////////////////////////////////////////////////////////////////////////////////
 
 func inRequirement(compsKey *compsKey, compKey CompKey) bool {
 	return 0 < (*compsKey)[compKey/compsKeyUnitSize]&(1<<(compKey%compsKeyUnitSize))

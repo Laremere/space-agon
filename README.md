@@ -94,3 +94,14 @@ kubectl create -f allocation.yaml -o yaml
 
 ```
 Then use `connect("<ip>:<port>")` inside the javascript console.
+
+# Game development only
+
+Generate components file:
+```
+
+go generate github.com/googleforgames/space-agon/game/generation && \
+GOOS=js GOARCH=wasm go test github.com/googleforgames/space-agon/client/... && \
+go test github.com/googleforgames/space-agon/...
+
+```
