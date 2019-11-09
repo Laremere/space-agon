@@ -17,26 +17,31 @@ package game
 import (
 	"math"
 	"math/rand"
+
+	"github.com/golang/protobuf/proto"
+	"github.com/googleforgames/space-agon/game/pb"
 )
 
 type Game struct {
-	E               *Entities
-	initialized     bool
-	NextNetworkId   NetworkId
-	NewClientUpdate *NetworkUpdate // TODO: Actually send to server from clients on connect
+	E             *Entities
+	initialized   bool
+	NextNetworkId uint64
+	// NewClientUpdate *NetworkUpdate // TODO: Actually send to server from clients on connect
 
 	ControlledShip *Lookup
 	timeDead       float32
+	NetworkIds     map[uint64]*Lookup
 }
 
 func NewGame() *Game {
 	g := &Game{
 		E: newEntities(),
 		// Oh man, this is such a bad hack.
-		NextNetworkId:   NetworkId(rand.Int63()),
-		NewClientUpdate: NewNetworkUpdate(),
+		NextNetworkId: uint64(rand.Int63()),
+		// NewClientUpdate: NewNetworkUpdate(),
 
-		timeDead: 100,
+		timeDead:   100,
+		NetworkIds: make(map[uint64]*Lookup),
 	}
 
 	return g
@@ -67,6 +72,14 @@ func (k *Keystate) Up() {
 	}
 }
 
+func getNid(g *Game, i *Iter, nid uint64) {
+	lookup, ok := g.NetworkIds[nid]
+	if !ok || !lookup.Alive() {
+		panic("Destory non-existant")
+	}
+	i.Get(lookup)
+}
+
 type Input struct {
 	Up    Keystate
 	Down  Keystate
@@ -81,14 +94,60 @@ type Input struct {
 	IsPlayer    bool
 	IsConnected bool
 	// Whether the this instance is the host, if not it is a client.
-	IsHost bool
-	Conns  map[int]*NetworkConnection
+	IsHost   bool
+	Cid      int64
+	Memos    []*pb.Memo
+	MemosOut []*pb.Memo
+	// Conns  map[int]*NetworkConnection
 }
 
 func NewInput() *Input {
 	return &Input{
-		Conns: make(map[int]*NetworkConnection),
+		// Conns: make(map[int]*NetworkConnection),
 	}
+}
+
+func (i *Input) SendTo(to int64, actual proto.Message) {
+	i.SendMemo(&pb.Memo{
+		Recipient: &pb.Memo_To{
+			To: to,
+		},
+	}, actual)
+}
+
+func (i *Input) BroadcastOthers(actual proto.Message) {
+	i.SendMemo(&pb.Memo{
+		Recipient: &pb.Memo_EveryoneBut{
+			EveryoneBut: i.Cid,
+		},
+	}, actual)
+}
+
+func (i *Input) BroadcastAll(actual proto.Message) {
+	panic("not done yet")
+}
+
+func (i *Input) SendMemo(partial *pb.Memo, actual proto.Message) {
+	switch a := actual.(type) {
+	case *pb.PosTracks:
+		partial.Actual = &pb.Memo_PosTracks{PosTracks: a}
+	case *pb.MomentumTracks:
+		partial.Actual = &pb.Memo_MomentumTracks{MomentumTracks: a}
+	case *pb.RotTracks:
+		partial.Actual = &pb.Memo_RotTracks{RotTracks: a}
+	case *pb.SpinTracks:
+		partial.Actual = &pb.Memo_SpinTracks{SpinTracks: a}
+	case *pb.ShipControlTrack:
+		partial.Actual = &pb.Memo_ShipControlTrack{ShipControlTrack: a}
+	case *pb.SpawnEvent:
+		partial.Actual = &pb.Memo_SpawnEvent{SpawnEvent: a}
+	case *pb.DestroyEvent:
+		partial.Actual = &pb.Memo_DestroyEvent{DestroyEvent: a}
+	default:
+		panic("Unknown memo actual type")
+	}
+
+	i.MemosOut = append(i.MemosOut, partial)
 }
 
 func (inp *Input) FrameEndReset() {
@@ -112,166 +171,249 @@ func (g *Game) Step(input *Input) {
 		shipControl.Fire = input.Fire.Hold
 	}
 
-	connUpdatesOutputs := make(map[int]*NetworkUpdate)
-	connUpdatesOutputs[-1] = NewNetworkUpdate()
+	for _, memo := range input.Memos {
+		switch actual := memo.Actual.(type) {
+		case *pb.Memo_DestroyEvent:
+			destroyEvent := actual.DestroyEvent
 
-	networkTracks := make(map[NetworkId]*NetworkTrack)
-	destroyEvents := make(map[NetworkId]struct{})
+			i := g.E.NewIter()
+			getNid(g, i, destroyEvent.Nid)
+			i.Remove()
 
-	{
-		for id := range input.Conns {
-			connUpdatesOutputs[id] = NewNetworkUpdate()
-		}
-		for id, conn := range input.Conns {
-			select {
+		case *pb.Memo_SpawnEvent:
+			spawnEvent := actual.SpawnEvent
+
+			i := g.E.NewIter()
+			i.Require(LookupKey)
+			i.Require(NetworkRecieveKey)
+
+			switch spawnEvent.SpawnType {
+			case pb.SpawnEvent_SHIP:
+				spawnSpaceship(i)
+			case pb.SpawnEvent_MISSILE:
+				spawnMissile(i)
+			case pb.SpawnEvent_EXPLOSION:
+				spawnExplosion(i)
 			default:
-			case u := <-conn.Recieving:
-				for nid := range u.DestroyEvents {
-					for oid := range connUpdatesOutputs {
-						if oid != id {
-							connUpdatesOutputs[oid].DestroyEvents[nid] = struct{}{}
-						}
-					}
-					// log.Println("Got destroy for", nid)
-					destroyEvents[nid] = struct{}{}
-				}
-				//////////////////////
-				// spawn events
-				//////////////////////
-				for nid, spawnType := range u.SpawnEvents {
-
-					for oid := range connUpdatesOutputs {
-						if oid != id {
-							connUpdatesOutputs[oid].SpawnEvents[nid] = spawnType
-						}
-					}
-
-					switch spawnType {
-					case SpawnShip:
-						i := g.E.NewIter()
-						i.Require(NetworkRecieveKey)
-						// i.Require(NetworkPosRecieveKey)
-						// i.Require(NetworkRotRecieveKey)
-						// i.Require(NetworkMomentumRecieveKey)
-						// i.Require(NetworkSpinRecieveKey)
-						// i.Require(NetworkShipControlRecieveKey)
-						spawnSpaceship(i)
-						*i.NetworkId() = nid
-
-					case SpawnMissile:
-						i := g.E.NewIter()
-						i.Require(NetworkRecieveKey)
-						// i.Require(NetworkPosRecieveKey)
-						// i.Require(NetworkRotRecieveKey)
-						// i.Require(NetworkMomentumRecieveKey)
-						// i.Require(NetworkSpinRecieveKey)
-						spawnMissile(i)
-						*i.NetworkId() = nid
-
-					case SpawnExplosion:
-						i := g.E.NewIter()
-						i.Require(NetworkRecieveKey)
-						spawnExplosion(i)
-						*i.NetworkId() = nid
-
-					default:
-						panic("Spawn what now?")
-					}
-				}
-
-				//////////////////////
-				// Tracks
-				//////////////////////
-
-				for nid, t := range u.Tracks {
-					networkTracks[nid] = t
-					for oid := range connUpdatesOutputs {
-						if oid != id {
-							connUpdatesOutputs[oid].Tracks[nid] = t
-						}
-					}
-				}
+				panic("Spawn what now?")
 			}
+
+			*i.NetworkId() = spawnEvent.Nid
+			g.NetworkIds[spawnEvent.Nid] = i.Lookup()
+
+		case *pb.Memo_PosTracks:
+			posTracks := actual.PosTracks
+			i := g.E.NewIter()
+
+			for index, nid := range posTracks.Nid {
+				getNid(g, i, nid)
+
+				*i.Pos() = Vec2{posTracks.X[index], posTracks.Y[index]}
+			}
+
+		case *pb.Memo_RotTracks:
+			rotTracks := actual.RotTracks
+			i := g.E.NewIter()
+
+			for index, nid := range rotTracks.Nid {
+				getNid(g, i, nid)
+
+				*i.Rot() = rotTracks.R[index]
+			}
+
+		case *pb.Memo_MomentumTracks:
+			momentumTracks := actual.MomentumTracks
+			i := g.E.NewIter()
+
+			for index, nid := range momentumTracks.Nid {
+				getNid(g, i, nid)
+
+				*i.Momentum() = Vec2{momentumTracks.X[index], momentumTracks.Y[index]}
+			}
+
+		case *pb.Memo_SpinTracks:
+			spinTracks := actual.SpinTracks
+			i := g.E.NewIter()
+
+			for index, nid := range spinTracks.Nid {
+				getNid(g, i, nid)
+
+				*i.Spin() = spinTracks.S[index]
+			}
+
+		case *pb.Memo_ShipControlTrack:
+			shipControlTrack := actual.ShipControlTrack
+			i := g.E.NewIter()
+
+			getNid(g, i, shipControlTrack.Nid)
+
+			sc := i.ShipControl()
+			sc.Up = shipControlTrack.Up
+			sc.Left = shipControlTrack.Left
+			sc.Right = shipControlTrack.Right
 		}
 	}
 
-	{ // Despawn destroyed
-		i := g.E.NewIter()
-		// i.Require(PosKey)
-		// i.Require(NetworkRecieveKey)
-		// i.Require(NetworkPosRecieveKey)
-		i.Require(NetworkIdKey)
-		for i.Next() {
-			if _, ok := destroyEvents[*i.NetworkId()]; ok {
-				i.Remove()
-			}
-		}
-	}
-	{ // Track Pos
-		i := g.E.NewIter()
-		i.Require(PosKey)
-		i.Require(NetworkRecieveKey)
-		// i.Require(NetworkPosRecieveKey)
-		i.Require(NetworkIdKey)
-		for i.Next() {
-			track, ok := networkTracks[*i.NetworkId()]
-			if ok {
-				*i.Pos() = track.Pos
-			}
-		}
-	}
-	{ // Track Rot
-		i := g.E.NewIter()
-		i.Require(RotKey)
-		i.Require(NetworkRecieveKey)
-		// i.Require(NetworkRotRecieveKey)
-		i.Require(NetworkIdKey)
-		for i.Next() {
-			track, ok := networkTracks[*i.NetworkId()]
-			if ok {
-				*i.Rot() = track.Rot
-			}
-		}
-	}
-	{ // Track Momentum
-		i := g.E.NewIter()
-		i.Require(MomentumKey)
-		i.Require(NetworkRecieveKey)
-		// i.Require(NetworkMomentumRecieveKey)
-		i.Require(NetworkIdKey)
-		for i.Next() {
-			track, ok := networkTracks[*i.NetworkId()]
-			if ok {
-				*i.Momentum() = track.Momentum
-			}
-		}
-	}
-	{ // Track Spin
-		i := g.E.NewIter()
-		i.Require(SpinKey)
-		i.Require(NetworkRecieveKey)
-		// i.Require(NetworkSpinRecieveKey)
-		i.Require(NetworkIdKey)
-		for i.Next() {
-			track, ok := networkTracks[*i.NetworkId()]
-			if ok {
-				*i.Spin() = track.Spin
-			}
-		}
-	}
-	{ // Track ShipControl
-		i := g.E.NewIter()
-		i.Require(ShipControlKey)
-		i.Require(NetworkRecieveKey)
-		// i.Require(NetworkShipControlRecieveKey)
-		i.Require(NetworkIdKey)
-		for i.Next() {
-			track, ok := networkTracks[*i.NetworkId()]
-			if ok {
-				*i.ShipControl() = track.ShipControl
-			}
-		}
-	}
+	// connUpdatesOutputs := make(map[int]*NetworkUpdate)
+	// connUpdatesOutputs[-1] = NewNetworkUpdate()
+
+	// networkTracks := make(map[NetworkId]*NetworkTrack)
+	// destroyEvents := make(map[NetworkId]struct{})
+
+	// {
+	// 	for id := range input.Conns {
+	// 		connUpdatesOutputs[id] = NewNetworkUpdate()
+	// 	}
+	// 	for id, conn := range input.Conns {
+	// 		select {
+	// 		default:
+	// 		case u := <-conn.Recieving:
+	// 			for nid := range u.DestroyEvents {
+	// 				for oid := range connUpdatesOutputs {
+	// 					if oid != id {
+	// 						connUpdatesOutputs[oid].DestroyEvents[nid] = struct{}{}
+	// 					}
+	// 				}
+	// 				// log.Println("Got destroy for", nid)
+	// 				destroyEvents[nid] = struct{}{}
+	// 			}
+	// 			//////////////////////
+	// 			// spawn events
+	// 			//////////////////////
+	// 			for nid, spawnType := range u.SpawnEvents {
+
+	// 				for oid := range connUpdatesOutputs {
+	// 					if oid != id {
+	// 						connUpdatesOutputs[oid].SpawnEvents[nid] = spawnType
+	// 					}
+	// 				}
+
+	// 				switch spawnType {
+	// 				case SpawnShip:
+	// 					i := g.E.NewIter()
+	// 					i.Require(NetworkRecieveKey)
+	// 					// i.Require(NetworkPosRecieveKey)
+	// 					// i.Require(NetworkRotRecieveKey)
+	// 					// i.Require(NetworkMomentumRecieveKey)
+	// 					// i.Require(NetworkSpinRecieveKey)
+	// 					// i.Require(NetworkShipControlRecieveKey)
+	// 					spawnSpaceship(i)
+	// 					*i.NetworkId() = nid
+
+	// 				case SpawnMissile:
+	// 					i := g.E.NewIter()
+	// 					i.Require(NetworkRecieveKey)
+	// 					// i.Require(NetworkPosRecieveKey)
+	// 					// i.Require(NetworkRotRecieveKey)
+	// 					// i.Require(NetworkMomentumRecieveKey)
+	// 					// i.Require(NetworkSpinRecieveKey)
+	// 					spawnMissile(i)
+	// 					*i.NetworkId() = nid
+
+	// 				case SpawnExplosion:
+	// 					i := g.E.NewIter()
+	// 					i.Require(NetworkRecieveKey)
+	// 					spawnExplosion(i)
+	// 					*i.NetworkId() = nid
+
+	// 				default:
+	// 					panic("Spawn what now?")
+	// 				}
+	// 			}
+
+	// 			//////////////////////
+	// 			// Tracks
+	// 			//////////////////////
+
+	// 			for nid, t := range u.Tracks {
+	// 				networkTracks[nid] = t
+	// 				for oid := range connUpdatesOutputs {
+	// 					if oid != id {
+	// 						connUpdatesOutputs[oid].Tracks[nid] = t
+	// 					}
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
+
+	// { // Despawn destroyed
+	// 	i := g.E.NewIter()
+	// 	// i.Require(PosKey)
+	// 	// i.Require(NetworkRecieveKey)
+	// 	// i.Require(NetworkPosRecieveKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		if _, ok := destroyEvents[*i.NetworkId()]; ok {
+	// 			i.Remove()
+	// 		}
+	// 	}
+	// }
+	// { // Track Pos
+	// 	i := g.E.NewIter()
+	// 	i.Require(PosKey)
+	// 	i.Require(NetworkRecieveKey)
+	// 	// i.Require(NetworkPosRecieveKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		track, ok := networkTracks[*i.NetworkId()]
+	// 		if ok {
+	// 			*i.Pos() = track.Pos
+	// 		}
+	// 	}
+	// }
+	// { // Track Rot
+	// 	i := g.E.NewIter()
+	// 	i.Require(RotKey)
+	// 	i.Require(NetworkRecieveKey)
+	// 	// i.Require(NetworkRotRecieveKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		track, ok := networkTracks[*i.NetworkId()]
+	// 		if ok {
+	// 			*i.Rot() = track.Rot
+	// 		}
+	// 	}
+	// }
+	// { // Track Momentum
+	// 	i := g.E.NewIter()
+	// 	i.Require(MomentumKey)
+	// 	i.Require(NetworkRecieveKey)
+	// 	// i.Require(NetworkMomentumRecieveKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		track, ok := networkTracks[*i.NetworkId()]
+	// 		if ok {
+	// 			*i.Momentum() = track.Momentum
+	// 		}
+	// 	}
+	// }
+	// { // Track Spin
+	// 	i := g.E.NewIter()
+	// 	i.Require(SpinKey)
+	// 	i.Require(NetworkRecieveKey)
+	// 	// i.Require(NetworkSpinRecieveKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		track, ok := networkTracks[*i.NetworkId()]
+	// 		if ok {
+	// 			*i.Spin() = track.Spin
+	// 		}
+	// 	}
+	// }
+	// { // Track ShipControl
+	// 	i := g.E.NewIter()
+	// 	i.Require(ShipControlKey)
+	// 	i.Require(NetworkRecieveKey)
+	// 	// i.Require(NetworkShipControlRecieveKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		track, ok := networkTracks[*i.NetworkId()]
+	// 		if ok {
+	// 			*i.ShipControl() = track.ShipControl
+	// 		}
+	// 	}
+	// }
 
 	if !g.initialized {
 		if input.IsRendered { // spawn stars
@@ -331,9 +473,10 @@ func (g *Game) Step(input *Input) {
 
 				g.ControlledShip = i.Lookup()
 
-				for _, u := range connUpdatesOutputs {
-					u.SpawnEvents[*i.NetworkId()] = SpawnShip
-				}
+				input.BroadcastOthers(&pb.SpawnEvent{
+					Nid:       uint64(*i.NetworkId()),
+					SpawnType: pb.SpawnEvent_SHIP,
+				})
 			}
 		}
 	}
@@ -362,10 +505,14 @@ func (g *Game) Step(input *Input) {
 						if diff.Length() < 1 {
 							newExplosions = append(newExplosions, [2]Vec2{*other.Pos(), *other.Momentum()})
 							if other.NetworkId() != nil {
-								for _, u := range connUpdatesOutputs {
-									// log.Println("Sent destroy for ", *i.NetworkId())
-									u.DestroyEvents[*other.NetworkId()] = struct{}{}
-								}
+
+								input.BroadcastOthers(&pb.DestroyEvent{
+									Nid: uint64(*other.NetworkId()),
+								})
+								// for _, u := range connUpdatesOutputs {
+								// 	// log.Println("Sent destroy for ", *i.NetworkId())
+								// 	u.DestroyEvents[*other.NetworkId()] = struct{}{}
+								// }
 							}
 							other.Remove()
 							break
@@ -391,9 +538,13 @@ func (g *Game) Step(input *Input) {
 			*ie.TimedDestroy() = 0.5
 			g.NextNetworkId++
 
-			for _, u := range connUpdatesOutputs {
-				u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
-			}
+			input.BroadcastOthers(&pb.SpawnEvent{
+				Nid:       uint64(*ie.NetworkId()),
+				SpawnType: pb.SpawnEvent_EXPLOSION,
+			})
+			// for _, u := range connUpdatesOutputs {
+			// 	u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
+			// }
 		}
 	}
 
@@ -457,10 +608,13 @@ func (g *Game) Step(input *Input) {
 			*i.TimedDestroy() -= input.Dt
 			if *i.TimedDestroy() <= 0 {
 				if i.NetworkId() != nil {
-					for _, u := range connUpdatesOutputs {
-						// log.Println("Sent destroy for ", *i.NetworkId())
-						u.DestroyEvents[*i.NetworkId()] = struct{}{}
-					}
+					input.BroadcastOthers(&pb.DestroyEvent{
+						Nid: uint64(*i.NetworkId()),
+					})
+					// for _, u := range connUpdatesOutputs {
+					// 	// log.Println("Sent destroy for ", *i.NetworkId())
+					// 	u.DestroyEvents[*i.NetworkId()] = struct{}{}
+					// }
 				}
 				i.Remove()
 			}
@@ -485,15 +639,22 @@ func (g *Game) Step(input *Input) {
 				*ie.TimedDestroy() = 0.5
 				g.NextNetworkId++
 
-				for _, u := range connUpdatesOutputs {
-					u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
-				}
+				input.BroadcastOthers(&pb.SpawnEvent{
+					Nid:       uint64(*ie.NetworkId()),
+					SpawnType: pb.SpawnEvent_EXPLOSION,
+				})
+				// for _, u := range connUpdatesOutputs {
+				// 	u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
+				// }
 
 				if i.NetworkId() != nil {
-					for _, u := range connUpdatesOutputs {
-						// log.Println("Sent destroy for ", *i.NetworkId())
-						u.DestroyEvents[*i.NetworkId()] = struct{}{}
-					}
+					input.BroadcastOthers(&pb.DestroyEvent{
+						Nid: uint64(*i.NetworkId()),
+					})
+					// for _, u := range connUpdatesOutputs {
+					// 	// log.Println("Sent destroy for ", *i.NetworkId())
+					// 	u.DestroyEvents[*i.NetworkId()] = struct{}{}
+					// }
 				}
 				i.Remove()
 			}
@@ -517,15 +678,22 @@ func (g *Game) Step(input *Input) {
 				*ie.TimedDestroy() = 0.5
 				g.NextNetworkId++
 
-				for _, u := range connUpdatesOutputs {
-					u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
-				}
+				input.BroadcastOthers(&pb.SpawnEvent{
+					Nid:       uint64(*ie.NetworkId()),
+					SpawnType: pb.SpawnEvent_EXPLOSION,
+				})
+				// for _, u := range connUpdatesOutputs {
+				// 	u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
+				// }
 
 				if i.NetworkId() != nil {
-					for _, u := range connUpdatesOutputs {
-						// log.Println("Sent destroy for ", *i.NetworkId())
-						u.DestroyEvents[*i.NetworkId()] = struct{}{}
-					}
+					input.BroadcastOthers(&pb.DestroyEvent{
+						Nid: uint64(*i.NetworkId()),
+					})
+					// for _, u := range connUpdatesOutputs {
+					// 	// log.Println("Sent destroy for ", *i.NetworkId())
+					// 	u.DestroyEvents[*i.NetworkId()] = struct{}{}
+					// }
 				}
 				i.Remove()
 				// println("ship alive: ", g.ControlledShip.Alive())
@@ -560,9 +728,13 @@ func (g *Game) Step(input *Input) {
 					*ie.TimedDestroy() = 0.5
 					g.NextNetworkId++
 
-					for _, u := range connUpdatesOutputs {
-						u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
-					}
+					input.BroadcastOthers(&pb.SpawnEvent{
+						Nid:       uint64(*ie.NetworkId()),
+						SpawnType: pb.SpawnEvent_EXPLOSION,
+					})
+					// for _, u := range connUpdatesOutputs {
+					// 	u.SpawnEvents[*ie.NetworkId()] = SpawnExplosion
+					// }
 					i.Remove()
 					break
 				}
@@ -660,9 +832,13 @@ func (g *Game) Step(input *Input) {
 				*im.NetworkId() = g.NextNetworkId
 				g.NextNetworkId++
 
-				for _, u := range connUpdatesOutputs {
-					u.SpawnEvents[*im.NetworkId()] = SpawnMissile
-				}
+				input.BroadcastOthers(&pb.SpawnEvent{
+					Nid:       uint64(*im.NetworkId()),
+					SpawnType: pb.SpawnEvent_MISSILE,
+				})
+				// for _, u := range connUpdatesOutputs {
+				// 	u.SpawnEvents[*im.NetworkId()] = SpawnMissile
+				// }
 			}
 		}
 	}
@@ -776,153 +952,240 @@ func (g *Game) Step(input *Input) {
 		}
 	}
 
-	{ // Transmit Pos
+	{
+		posTracks := &pb.PosTracks{}
+
 		i := g.E.NewIter()
 		i.Require(PosKey)
 		i.Require(NetworkTransmitKey)
-		// i.Require(NetworkPosTransmitKey)
 		i.Require(NetworkIdKey)
+
 		for i.Next() {
-			for _, u := range connUpdatesOutputs {
-				t, ok := u.Tracks[*i.NetworkId()]
-				if !ok {
-					t = &NetworkTrack{}
-					u.Tracks[*i.NetworkId()] = t
-				}
-				t.Pos = *i.Pos()
-			}
+			posTracks.Nid = append(posTracks.Nid, *i.NetworkId())
+			pos := *i.Pos()
+			posTracks.X = append(posTracks.X, pos[0])
+			posTracks.Y = append(posTracks.Y, pos[1])
 		}
+
+		input.BroadcastOthers(posTracks)
 	}
-	{ // Transmit Rot
+
+	{
+		rotTracks := &pb.RotTracks{}
+
 		i := g.E.NewIter()
 		i.Require(RotKey)
 		i.Require(NetworkTransmitKey)
-		// i.Require(NetworkRotTransmitKey)
 		i.Require(NetworkIdKey)
+
 		for i.Next() {
-			for _, u := range connUpdatesOutputs {
-				t, ok := u.Tracks[*i.NetworkId()]
-				if !ok {
-					t = &NetworkTrack{}
-					u.Tracks[*i.NetworkId()] = t
-				}
-				t.Rot = *i.Rot()
-			}
+			rotTracks.Nid = append(rotTracks.Nid, *i.NetworkId())
+			rotTracks.R = append(rotTracks.R, *i.Rot())
 		}
+
+		input.BroadcastOthers(rotTracks)
 	}
-	{ // Transmit Momentum
+
+	{
+		momentumTracks := &pb.MomentumTracks{}
+
 		i := g.E.NewIter()
 		i.Require(MomentumKey)
 		i.Require(NetworkTransmitKey)
-		// i.Require(NetworkMomentumTransmitKey)
 		i.Require(NetworkIdKey)
+
 		for i.Next() {
-			for _, u := range connUpdatesOutputs {
-				t, ok := u.Tracks[*i.NetworkId()]
-				if !ok {
-					t = &NetworkTrack{}
-					u.Tracks[*i.NetworkId()] = t
-				}
-				t.Momentum = *i.Momentum()
-			}
+			momentumTracks.Nid = append(momentumTracks.Nid, *i.NetworkId())
+			pos := *i.Pos()
+			momentumTracks.X = append(momentumTracks.X, pos[0])
+			momentumTracks.Y = append(momentumTracks.Y, pos[1])
 		}
+
+		input.BroadcastOthers(momentumTracks)
 	}
-	{ // Transmit Spin
+
+	{
+		spinTracks := &pb.SpinTracks{}
+
 		i := g.E.NewIter()
 		i.Require(SpinKey)
 		i.Require(NetworkTransmitKey)
-		// i.Require(NetworkSpinTransmitKey)
 		i.Require(NetworkIdKey)
+
 		for i.Next() {
-			for _, u := range connUpdatesOutputs {
-				t, ok := u.Tracks[*i.NetworkId()]
-				if !ok {
-					t = &NetworkTrack{}
-					u.Tracks[*i.NetworkId()] = t
-				}
-				t.Spin = *i.Spin()
-			}
+			spinTracks.Nid = append(spinTracks.Nid, *i.NetworkId())
+			spinTracks.S = append(spinTracks.S, *i.Rot())
+		}
+
+		input.BroadcastOthers(spinTracks)
+	}
+
+	{
+		i := g.E.NewIter()
+		i.Require(ShipControlKey)
+		i.Require(NetworkTransmitKey)
+		i.Require(NetworkIdKey)
+
+		for i.Next() {
+			shipControlTrack := &pb.ShipControlTrack{}
+
+			shipControlTrack.Nid = *i.NetworkId()
+			sc := i.ShipControl()
+			shipControlTrack.Up = sc.Up
+			shipControlTrack.Left = sc.Left
+			shipControlTrack.Right = sc.Right
+
+			input.BroadcastOthers(shipControlTrack)
 		}
 	}
 
-	for id := range input.Conns {
-		NetworkUpdateCombineAndPass(input.Conns[id].Sending, connUpdatesOutputs[id])
-	}
+	// { // Transmit Pos
+	// 	i := g.E.NewIter()
+	// 	i.Require(PosKey)
+	// 	i.Require(NetworkTransmitKey)
+	// 	// i.Require(NetworkPosTransmitKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		for _, u := range connUpdatesOutputs {
+	// 			t, ok := u.Tracks[*i.NetworkId()]
+	// 			if !ok {
+	// 				t = &NetworkTrack{}
+	// 				u.Tracks[*i.NetworkId()] = t
+	// 			}
+	// 			t.Pos = *i.Pos()
+	// 		}
+	// 	}
+	// }
+	// { // Transmit Rot
+	// 	i := g.E.NewIter()
+	// 	i.Require(RotKey)
+	// 	i.Require(NetworkTransmitKey)
+	// 	// i.Require(NetworkRotTransmitKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		for _, u := range connUpdatesOutputs {
+	// 			t, ok := u.Tracks[*i.NetworkId()]
+	// 			if !ok {
+	// 				t = &NetworkTrack{}
+	// 				u.Tracks[*i.NetworkId()] = t
+	// 			}
+	// 			t.Rot = *i.Rot()
+	// 		}
+	// 	}
+	// }
+	// { // Transmit Momentum
+	// 	i := g.E.NewIter()
+	// 	i.Require(MomentumKey)
+	// 	i.Require(NetworkTransmitKey)
+	// 	// i.Require(NetworkMomentumTransmitKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		for _, u := range connUpdatesOutputs {
+	// 			t, ok := u.Tracks[*i.NetworkId()]
+	// 			if !ok {
+	// 				t = &NetworkTrack{}
+	// 				u.Tracks[*i.NetworkId()] = t
+	// 			}
+	// 			t.Momentum = *i.Momentum()
+	// 		}
+	// 	}
+	// }
+	// { // Transmit Spin
+	// 	i := g.E.NewIter()
+	// 	i.Require(SpinKey)
+	// 	i.Require(NetworkTransmitKey)
+	// 	// i.Require(NetworkSpinTransmitKey)
+	// 	i.Require(NetworkIdKey)
+	// 	for i.Next() {
+	// 		for _, u := range connUpdatesOutputs {
+	// 			t, ok := u.Tracks[*i.NetworkId()]
+	// 			if !ok {
+	// 				t = &NetworkTrack{}
+	// 				u.Tracks[*i.NetworkId()] = t
+	// 			}
+	// 			t.Spin = *i.Spin()
+	// 		}
+	// 	}
+	// }
 
-	g.NewClientUpdate.AndThen(connUpdatesOutputs[-1])
+	// for id := range input.Conns {
+	// 	NetworkUpdateCombineAndPass(input.Conns[id].Sending, connUpdatesOutputs[id])
+	// }
+
+	// g.NewClientUpdate.AndThen(connUpdatesOutputs[-1])
 }
 
-type NetworkConnection struct {
-	Sending   chan *NetworkUpdate
-	Recieving chan *NetworkUpdate
-}
+// type NetworkConnection struct {
+// 	Sending   chan *NetworkUpdate
+// 	Recieving chan *NetworkUpdate
+// }
 
-func NewNetworkConnection() *NetworkConnection {
-	n := &NetworkConnection{
-		Sending:   make(chan *NetworkUpdate, 1),
-		Recieving: make(chan *NetworkUpdate, 1),
-	}
-	return n
-}
+// func NewNetworkConnection() *NetworkConnection {
+// 	n := &NetworkConnection{
+// 		Sending:   make(chan *NetworkUpdate, 1),
+// 		Recieving: make(chan *NetworkUpdate, 1),
+// 	}
+// 	return n
+// }
 
-func NetworkUpdateCombineAndPass(c chan *NetworkUpdate, u *NetworkUpdate) {
-	select {
-	case c <- u:
-	case uPrevious := <-c:
-		toSend := NewNetworkUpdate()
-		toSend.AndThen(uPrevious)
-		toSend.AndThen(u)
-		c <- toSend
-	}
-}
+// func NetworkUpdateCombineAndPass(c chan *NetworkUpdate, u *NetworkUpdate) {
+// 	select {
+// 	case c <- u:
+// 	case uPrevious := <-c:
+// 		toSend := NewNetworkUpdate()
+// 		toSend.AndThen(uPrevious)
+// 		toSend.AndThen(u)
+// 		c <- toSend
+// 	}
+// }
 
-type NetworkId uint64
+// type NetworkId uint64
 
-type NetworkUpdate struct {
-	SpawnEvents   map[NetworkId]SpawnType
-	DestroyEvents map[NetworkId]struct{}
-	Tracks        map[NetworkId]*NetworkTrack
-}
+// type NetworkUpdate struct {
+// 	SpawnEvents   map[NetworkId]SpawnType
+// 	DestroyEvents map[NetworkId]struct{}
+// 	Tracks        map[NetworkId]*NetworkTrack
+// }
 
-func NewNetworkUpdate() *NetworkUpdate {
-	return &NetworkUpdate{
-		SpawnEvents:   make(map[NetworkId]SpawnType),
-		DestroyEvents: make(map[NetworkId]struct{}),
-		Tracks:        make(map[NetworkId]*NetworkTrack),
-	}
-}
+// func NewNetworkUpdate() *NetworkUpdate {
+// 	return &NetworkUpdate{
+// 		SpawnEvents:   make(map[NetworkId]SpawnType),
+// 		DestroyEvents: make(map[NetworkId]struct{}),
+// 		Tracks:        make(map[NetworkId]*NetworkTrack),
+// 	}
+// }
 
-func (uPrevious *NetworkUpdate) AndThen(uNext *NetworkUpdate) {
-	for k, v := range uNext.Tracks {
-		uPrevious.Tracks[k] = v
-	}
-	for k, v := range uNext.SpawnEvents {
-		uPrevious.SpawnEvents[k] = v
-	}
-	for k, v := range uNext.DestroyEvents {
-		if _, ok := uPrevious.SpawnEvents[k]; ok {
-			delete(uPrevious.SpawnEvents, k)
-		} else {
-			uPrevious.DestroyEvents[k] = v
-		}
-	}
-}
+// func (uPrevious *NetworkUpdate) AndThen(uNext *NetworkUpdate) {
+// 	for k, v := range uNext.Tracks {
+// 		uPrevious.Tracks[k] = v
+// 	}
+// 	for k, v := range uNext.SpawnEvents {
+// 		uPrevious.SpawnEvents[k] = v
+// 	}
+// 	for k, v := range uNext.DestroyEvents {
+// 		if _, ok := uPrevious.SpawnEvents[k]; ok {
+// 			delete(uPrevious.SpawnEvents, k)
+// 		} else {
+// 			uPrevious.DestroyEvents[k] = v
+// 		}
+// 	}
+// }
 
-type SpawnType uint
+// type SpawnType uint
 
-const (
-	SpawnShip = SpawnType(iota)
-	SpawnMissile
-	SpawnExplosion
-)
+// const (
+// 	SpawnShip = SpawnType(iota)
+// 	SpawnMissile
+// 	SpawnExplosion
+// )
 
-type NetworkTrack struct {
-	Pos         Vec2
-	Momentum    Vec2
-	Rot         float32
-	Spin        float32
-	ShipControl ShipControl
-}
+// type NetworkTrack struct {
+// 	Pos         Vec2
+// 	Momentum    Vec2
+// 	Rot         float32
+// 	Spin        float32
+// 	ShipControl ShipControl
+// }
 
 func spawnSpaceship(i *Iter) {
 	i.Require(PosKey)

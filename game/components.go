@@ -78,20 +78,6 @@ func (c *comp_MissileDetails) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
 }
 
-type comp_NetworkId []NetworkId
-
-func (c *comp_NetworkId) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *comp_NetworkId) Extend(i int) {
-	*c = append(*c, 0)
-}
-
-func (c *comp_NetworkId) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
 type comp_ShipControl []ShipControl
 
 func (c *comp_ShipControl) Swap(j1, j2 int) {
@@ -103,20 +89,6 @@ func (c *comp_ShipControl) Extend(i int) {
 }
 
 func (c *comp_ShipControl) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
-type comp_SpawnType []SpawnType
-
-func (c *comp_SpawnType) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *comp_SpawnType) Extend(i int) {
-	*c = append(*c, 0)
-}
-
-func (c *comp_SpawnType) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
 }
 
@@ -162,6 +134,20 @@ func (c *comp_float32) RemoveLast() {
 	*c = (*c)[:len(*c)-1]
 }
 
+type comp_uint64 []uint64
+
+func (c *comp_uint64) Swap(j1, j2 int) {
+	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
+}
+
+func (c *comp_uint64) Extend(i int) {
+	*c = append(*c, 0)
+}
+
+func (c *comp_uint64) RemoveLast() {
+	*c = (*c)[:len(*c)-1]
+}
+
 const (
 	AffectedByGravityKey = CompKey(iota)
 	BoundLocationKey     = CompKey(iota)
@@ -180,7 +166,6 @@ const (
 	PosKey               = CompKey(iota)
 	RotKey               = CompKey(iota)
 	ShipControlKey       = CompKey(iota)
-	SpawnEventKey        = CompKey(iota)
 	SpinKey              = CompKey(iota)
 	SpriteKey            = CompKey(iota)
 	TimedDestroyKey      = CompKey(iota)
@@ -198,11 +183,10 @@ type EntityBag struct {
 	Lookup           *comp_Lookup
 	MissileDetails   *comp_MissileDetails
 	Momentum         *comp_Vec2
-	NetworkId        *comp_NetworkId
+	NetworkId        *comp_uint64
 	Pos              *comp_Vec2
 	Rot              *comp_float32
 	ShipControl      *comp_ShipControl
-	SpawnEvent       *comp_SpawnType
 	Spin             *comp_float32
 	Sprite           *comp_Sprite
 	TimedDestroy     *comp_float32
@@ -237,7 +221,7 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 	}
 
 	if inRequirement(compsKey, NetworkIdKey) {
-		bag.NetworkId = &comp_NetworkId{}
+		bag.NetworkId = &comp_uint64{}
 		bag.comps = append(bag.comps, bag.NetworkId)
 	}
 
@@ -254,11 +238,6 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 	if inRequirement(compsKey, ShipControlKey) {
 		bag.ShipControl = &comp_ShipControl{}
 		bag.comps = append(bag.comps, bag.ShipControl)
-	}
-
-	if inRequirement(compsKey, SpawnEventKey) {
-		bag.SpawnEvent = &comp_SpawnType{}
-		bag.comps = append(bag.comps, bag.SpawnEvent)
 	}
 
 	if inRequirement(compsKey, SpinKey) {
@@ -316,7 +295,7 @@ func (iter *Iter) Momentum() *Vec2 {
 	return &(*comp)[iter.j]
 }
 
-func (iter *Iter) NetworkId() *NetworkId {
+func (iter *Iter) NetworkId() *uint64 {
 	comp := iter.e.bags[iter.i].NetworkId
 	if comp == nil {
 		return nil
@@ -342,14 +321,6 @@ func (iter *Iter) Rot() *float32 {
 
 func (iter *Iter) ShipControl() *ShipControl {
 	comp := iter.e.bags[iter.i].ShipControl
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
-}
-
-func (iter *Iter) SpawnEvent() *SpawnType {
-	comp := iter.e.bags[iter.i].SpawnEvent
 	if comp == nil {
 		return nil
 	}

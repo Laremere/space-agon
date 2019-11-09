@@ -17,15 +17,15 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"sync"
 	"syscall/js"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/googleforgames/space-agon/game"
+	"github.com/googleforgames/space-agon/game/pb"
 	"google.golang.org/grpc/status"
-	"open-match.dev/open-match/pkg/pb"
+	ompb "open-match.dev/open-match/pkg/pb"
 )
 
 func main() {
@@ -118,48 +118,73 @@ type client struct {
 	inp           *game.Input
 	lastTimestamp float64
 	lock          sync.Mutex
+	sending       chan []*pb.Memo
+	recieving     chan []*pb.Memo
+	initialized   bool
 }
 
 func (c *client) connect(addr string) {
 	c.lock.Lock()
-	c.lock.Unlock()
+	defer c.lock.Unlock()
 
-	for id, conn := range c.inp.Conns {
-		close(conn.Sending)
-		delete(c.inp.Conns, id)
+	c.initialized = false
+
+	if c.sending != nil {
+		close(c.sending)
 	}
-	c.g = game.NewGame()
 
-	serverConn := game.NewNetworkConnection()
-	c.inp.Conns[0] = serverConn
+	c.sending = make(chan []*pb.Memo, 1)
+	c.recieving = make(chan []*pb.Memo, 1)
+
+	// for id, conn := range c.inp.Conns {
+	// 	close(conn.Sending)
+	// 	delete(c.inp.Conns, id)
+	// }
+
+	// serverConn := game.NewNetworkConnection()
+	// c.inp.Conns[0] = serverConn
 	ws := js.Global().Get("WebSocket").New("ws://" + addr + "/connect/")
 
 	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		go func() {
-			log.Println("Websocket onopen!", args[0].Get("toString"))
-
-			for toSend := range serverConn.Sending {
-				b, err := json.Marshal(toSend)
-				if err != nil {
-					log.Printf("Sending had Marshal error %v", err)
-					return
-				}
-				ws.Call("send", string(b))
-			}
-		}()
+		log.Println("Websocket onopen!", args[0].Get("toString"))
 		return nil
 	}))
 
 	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		// log.Println("Websocket onmessage!", args[0].Get("data").String())
+		if !c.initialized {
+			clientInitialize := &pb.ClientInitialize{}
+			buf := proto.NewBuffer([]byte(args[0].Get("data").String()))
+			err := buf.DecodeMessage(clientInitialize)
+			if err != nil {
+				log.Printf("Recieving had Unmarshal error %v", err)
+				// TOOD: Disconnect, display error, etc.
+				return nil
+			}
 
-		v := game.NewNetworkUpdate()
-		err := json.Unmarshal([]byte(args[0].Get("data").String()), v)
-		if err != nil {
-			log.Printf("Recieving had Unmarshal error %v", err)
+			c.initialize(ws, clientInitialize)
 			return nil
 		}
-		game.NetworkUpdateCombineAndPass(serverConn.Recieving, v)
+
+		memos := &pb.Memos{}
+
+		buf := proto.NewBuffer([]byte(args[0].Get("data").String()))
+		err := buf.DecodeMessage(memos)
+		if err != nil {
+			log.Printf("Recieving had Unmarshal error %v", err)
+			// TOOD: Disconnect, display error, etc.
+			return nil
+		}
+
+		combineToSend(c.recieving, memos.Memos)
+
+		// v := game.NewNetworkUpdate()
+		// err := json.Unmarshal([]byte(args[0].Get("data").String()), v)
+		// if err != nil {
+		// 	log.Printf("Recieving had Unmarshal error %v", err)
+		// 	return nil
+		// }
+		// game.NetworkUpdateCombineAndPass(serverConn.Recieving, v)
 		return nil
 	}))
 
@@ -176,6 +201,42 @@ func (c *client) connect(addr string) {
 	c.inp.IsConnected = true
 }
 
+func (c *client) initialize(ws js.Value, clientInitialize *pb.ClientInitialize) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.initialized = true
+	c.inp.Cid = clientInitialize.Cid
+
+	c.g = game.NewGame()
+
+	go func() {
+		buf := proto.NewBuffer(nil)
+
+		for toSend := range c.sending {
+			err := buf.EncodeMessage(&pb.Memos{Memos: toSend})
+			if err != nil {
+				log.Printf("Sending had Marshal error %v", err)
+				// TODO: Disconnect, display error, etc.
+				return
+			}
+			ws.Call("send", string(buf.Bytes()))
+
+			buf.Reset()
+		}
+
+		// for toSend := range serverConn.Sending {
+		// 	b, err := json.Marshal(toSend)
+		// 	if err != nil {
+		// 		log.Printf("Sending had Marshal error %v", err)
+		// 		return
+		// 	}
+		// 	ws.Call("send", string(b))
+		// }
+	}()
+
+}
+
 func (c *client) matchmake() {
 	addr := js.Global().Get("window").Get("location").Get("host").String()
 	ws := js.Global().Get("WebSocket").New("ws://" + addr + "/matchmake/")
@@ -188,7 +249,7 @@ func (c *client) matchmake() {
 	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		log.Println("Matchmaking Websocket onmessage!")
 
-		a := &pb.Assignment{}
+		a := &ompb.Assignment{}
 		err := proto.Unmarshal([]byte(args[0].Get("data").String()), a)
 		if err != nil {
 			log.Println("Error Unmarshaling assignment:", err)
@@ -198,6 +259,7 @@ func (c *client) matchmake() {
 		if a.Error != nil {
 			err := status.FromProto(a.Error).Err()
 			if err != nil {
+				// TODO: Display error
 				log.Println("Error on assignment:", err)
 				return nil
 			}
@@ -228,7 +290,20 @@ func (c *client) scheduleFrame() {
 		now := args[0].Float()
 		c.inp.Dt = float32((now - c.lastTimestamp) / 1000)
 		c.lastTimestamp = now
+
+		select {
+		case c.inp.Memos = <-c.recieving:
+		default:
+			c.inp.Memos = nil
+		}
+
 		c.frame()
+
+		if c.sending != nil {
+			combineToSend(c.sending, c.inp.MemosOut)
+		}
+		c.inp.MemosOut = nil
+
 		return nil
 	}))
 }
@@ -389,3 +464,12 @@ type WrappedWebSocket struct {
 // func (w *WrappedWebSocket) Recv() ([]byte, error) {
 
 // }
+
+func combineToSend(c chan []*pb.Memo, memos []*pb.Memo) {
+	select {
+	case previousMemos := <-c:
+		previousMemos = append(previousMemos, memos...)
+		c <- previousMemos
+	case c <- memos:
+	}
+}
