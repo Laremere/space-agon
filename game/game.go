@@ -315,6 +315,7 @@ func (g *Game) Step(input *Input) {
 			}
 
 			*i.NetworkId() = spawnMissile.Nid
+			g.NetworkIds[spawnMissile.Nid] = i.Lookup()
 			*i.Pos() = Vec2FromProto(spawnMissile.Pos)
 			*i.Momentum() = Vec2FromProto(spawnMissile.Momentum)
 			*i.Rot() = spawnMissile.Rot
