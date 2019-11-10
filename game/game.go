@@ -73,12 +73,13 @@ func (k *Keystate) Up() {
 	}
 }
 
-func getNid(g *Game, i *Iter, nid uint64) {
+func getNid(g *Game, i *Iter, nid uint64) bool {
 	lookup, ok := g.NetworkIds[nid]
 	if !ok || !lookup.Alive() {
-		panic(fmt.Sprintf("nid %d lookup failed", nid))
+		return false
 	}
 	i.Get(lookup)
+	return true
 }
 
 type Input struct {
@@ -178,8 +179,9 @@ func (g *Game) Step(input *Input) {
 			destroyEvent := actual.DestroyEvent
 
 			i := g.E.NewIter()
-			getNid(g, i, destroyEvent.Nid)
-			i.Remove()
+			if getNid(g, i, destroyEvent.Nid) {
+				i.Remove()
+			}
 
 		case *pb.Memo_SpawnEvent:
 			spawnEvent := actual.SpawnEvent
@@ -207,9 +209,9 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 
 			for index, nid := range posTracks.Nid {
-				getNid(g, i, nid)
-
-				*i.Pos() = Vec2{posTracks.X[index], posTracks.Y[index]}
+				if getNid(g, i, nid) {
+					*i.Pos() = Vec2{posTracks.X[index], posTracks.Y[index]}
+				}
 			}
 
 		case *pb.Memo_RotTracks:
@@ -217,9 +219,9 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 
 			for index, nid := range rotTracks.Nid {
-				getNid(g, i, nid)
-
-				*i.Rot() = rotTracks.R[index]
+				if getNid(g, i, nid) {
+					*i.Rot() = rotTracks.R[index]
+				}
 			}
 
 		case *pb.Memo_MomentumTracks:
@@ -227,9 +229,9 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 
 			for index, nid := range momentumTracks.Nid {
-				getNid(g, i, nid)
-
-				*i.Momentum() = Vec2{momentumTracks.X[index], momentumTracks.Y[index]}
+				if getNid(g, i, nid) {
+					*i.Momentum() = Vec2{momentumTracks.X[index], momentumTracks.Y[index]}
+				}
 			}
 
 		case *pb.Memo_SpinTracks:
@@ -237,21 +239,21 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 
 			for index, nid := range spinTracks.Nid {
-				getNid(g, i, nid)
-
-				*i.Spin() = spinTracks.S[index]
+				if getNid(g, i, nid) {
+					*i.Spin() = spinTracks.S[index]
+				}
 			}
 
 		case *pb.Memo_ShipControlTrack:
 			shipControlTrack := actual.ShipControlTrack
 			i := g.E.NewIter()
 
-			getNid(g, i, shipControlTrack.Nid)
-
-			sc := i.ShipControl()
-			sc.Up = shipControlTrack.Up
-			sc.Left = shipControlTrack.Left
-			sc.Right = shipControlTrack.Right
+			if getNid(g, i, shipControlTrack.Nid) {
+				sc := i.ShipControl()
+				sc.Up = shipControlTrack.Up
+				sc.Left = shipControlTrack.Left
+				sc.Right = shipControlTrack.Right
+			}
 		}
 	}
 
@@ -997,9 +999,9 @@ func (g *Game) Step(input *Input) {
 
 		for i.Next() {
 			momentumTracks.Nid = append(momentumTracks.Nid, *i.NetworkId())
-			pos := *i.Pos()
-			momentumTracks.X = append(momentumTracks.X, pos[0])
-			momentumTracks.Y = append(momentumTracks.Y, pos[1])
+			momentum := *i.Momentum()
+			momentumTracks.X = append(momentumTracks.X, momentum[0])
+			momentumTracks.Y = append(momentumTracks.Y, momentum[1])
 		}
 
 		input.BroadcastOthers(momentumTracks)
@@ -1015,7 +1017,7 @@ func (g *Game) Step(input *Input) {
 
 		for i.Next() {
 			spinTracks.Nid = append(spinTracks.Nid, *i.NetworkId())
-			spinTracks.S = append(spinTracks.S, *i.Rot())
+			spinTracks.S = append(spinTracks.S, *i.Spin())
 		}
 
 		input.BroadcastOthers(spinTracks)
