@@ -125,9 +125,6 @@ type client struct {
 }
 
 func (c *client) connect(addr string) {
-	// log.Println("connect start")
-	// defer log.Println("connect end")
-
 	wws, err := NewWrappedWebSocket("ws://" + addr + "/connect/")
 	if err != nil {
 		log.Fatal(err)
@@ -135,9 +132,6 @@ func (c *client) connect(addr string) {
 	stream := protostream.NewProtoStream(wws)
 
 	go func() {
-		// log.Println("init start")
-		// defer log.Println("init end")
-
 		{
 			clientInitialize := &pb.ClientInitialize{}
 			err := stream.Recv(clientInitialize)
@@ -171,7 +165,6 @@ func (c *client) connect(addr string) {
 		}()
 
 		go func() {
-			// log.Println("running recv")
 			for {
 				memos := &pb.Memos{}
 				err := stream.Recv(memos)
@@ -304,13 +297,11 @@ func (c *client) frame() {
 		}
 	}
 
-	// count := 0
 	{
 		i := c.g.E.NewIter()
 		i.Require(game.PosKey)
 		i.Require(game.SpriteKey)
 		for i.Next() {
-			// count++
 			p := *i.Pos()
 			rot := i.Rot()
 			rotation := float32(0)
@@ -361,23 +352,13 @@ func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
 	}))
 
 	blobCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		// js.Global().Get("console").Call("log", args[0])
-		// data := args[0].Get("data")
 		data := js.Global().Get("Uint8Array").New(args[0])
-		// js.Global().Get("console").Call("log", data)
-
-		// log.Println("data type:", data.Type().String())
 		length := data.Length()
-		// log.Println("Legnth:", length)
-		// log.Println("Data:", data)
 		b := make([]byte, length)
 
 		js.CopyBytesToGo(b, data)
-		// b := []byte(data.String())
 
-		// log.Println("writing to pipe")
 		_, err := wws.w.Write(b)
-		// log.Println("done writing to pipe")
 		if err != nil {
 			log.Println("Error in onmessage on ", addr, ":", err)
 		}
@@ -385,26 +366,9 @@ func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
 	})
 
 	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		// js.Global().Get("console").Call("log", args[0])
 		data := args[0].Get("data")
-
 		data.Call("arrayBuffer").Call("then", blobCallback)
 
-		// log.Println("data type:", data.Type().String())
-		// length := data.Length()
-		// log.Println("Legnth:", length)
-		// log.Println("Data:", data)
-		// b := make([]byte, length)
-
-		// js.CopyBytesToGo(b, data)
-		// // b := []byte(data.String())
-
-		// // log.Println("writing to pipe")
-		// _, err := wws.w.Write(b)
-		// // log.Println("done writing to pipe")
-		// if err != nil {
-		// 	log.Println("Error in onmessage on ", addr, ":", err)
-		// }
 		return nil
 	}))
 
@@ -432,8 +396,6 @@ func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
 }
 
 func (wws *WrappedWebSocket) Read(b []byte) (n int, err error) {
-	// log.Println("reading from pipe")
-	// defer log.Println("done reading from pipe")
 	return wws.r.Read(b)
 }
 
@@ -477,8 +439,6 @@ func (wws *WrappedWebSocket) Close() error {
 	wws.ws.Call("close")
 	return nil
 }
-
-// }
 
 func combineToSend(c chan []*pb.Memo, memos []*pb.Memo) {
 	select {

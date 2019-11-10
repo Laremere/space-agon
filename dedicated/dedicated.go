@@ -92,7 +92,6 @@ func (d *dedicated) Handler(c *websocket.Conn) {
 	defer d.waitForEmpty.Done()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	// n := game.NewNetworkConnection()
 
 	cid := <-d.nextCid
 	d.nextCid <- cid + 1
@@ -250,88 +249,6 @@ func isMemoRecipient(cid int64, memo *pb.Memo) bool {
 	}
 	panic("Unknown recipient type")
 }
-
-// ///////////////////////////////////////////////////////////////////////
-// ///////////////////////////////////////////////////////////////////////
-// ///////////////////////////////////////////////////////////////////////
-
-// type protoReader struct {
-// 	r     io.Reader
-// 	b     []byte
-// 	start int
-// 	end   int
-// }
-
-// func newProtoReader(r io.Reader) *protoReader {
-// 	return &protoReader{
-// 		r:     r,
-// 		start: 0,
-// 		end:   0,
-// 	}
-// }
-
-// func (p *protoReader) Unmarshal(m proto.Message) error {
-// 	messageSize := 0
-// 	for {
-// 		varIntVal, varintSize := proto.DecodeVarint(p.b[p.start:p.end])
-// 		log.Println("varIntVal", varIntVal, "varintSize", varintSize, "bytes", p.b[p.start:p.end])
-// 		if varintSize > 0 {
-// 			p.start += varintSize
-// 			messageSize = int(varIntVal)
-// 			break
-// 		}
-// 		err := p.fill(10) // Max size of a varint
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-// 	log.Println("declared message size:", messageSize)
-
-// 	for p.end-p.start < messageSize {
-// 		err := p.fill(messageSize)
-// 		if err != nil {
-// 			return err
-// 		}
-// 	}
-
-// 	err := proto.Unmarshal(p.b[p.start:p.start+messageSize], m)
-// 	log.Println("actual message size:", proto.Size(m))
-
-// 	p.start += messageSize
-// 	if p.start == p.end {
-// 		p.start = 0
-// 		p.end = 0
-// 	}
-// 	return err
-// }
-
-// // Will read so that (p.end - p.start) <= target.  However it tries to read
-// // so that (p.end - p.start) == target.  It will only not do so if a given read
-// // does not return enough bytes.
-// func (p *protoReader) fill(target int) error {
-// 	// log.Println("Filling with target", target)
-// 	if p.end >= p.start+target {
-// 		return nil
-// 	}
-// 	if p.start+target > len(p.b) {
-// 		if len(p.b) < target {
-// 			old := p.b[p.start:p.end]
-// 			p.b = make([]byte, target)
-// 			copy(p.b, old)
-// 		} else {
-// 			copy(p.b, p.b[p.start:p.end])
-// 		}
-// 		p.end -= p.start
-// 		p.start = 0
-// 	}
-
-// 	n, err := p.r.Read(p.b[p.end : p.start+target])
-// 	if err != nil {
-// 		return err
-// 	}
-// 	p.end += n
-// 	return nil
-// }
 
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////

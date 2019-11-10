@@ -295,32 +295,6 @@ func (g *graphics) Sprite(s *Sprite, centerx, centery, rotation float32) {
 
 	g.written += 12
 
-	// xMin := 10
-	// width := 10
-	// yMin := 10
-	// height := 10
-
-	// left := float32(xMin)
-	// g.vertices[g.written+0] = left
-	// g.vertices[g.written+2] = left
-	// g.vertices[g.written+6] = left
-
-	// top := float32(yMin)
-	// g.vertices[g.written+1] = top
-	// g.vertices[g.written+7] = top
-	// g.vertices[g.written+11] = top
-
-	// bottom := float32(yMin + height)
-	// g.vertices[g.written+3] = bottom
-	// g.vertices[g.written+5] = bottom
-	// g.vertices[g.written+9] = bottom
-
-	// right := float32(xMin + width)
-	// g.vertices[g.written+4] = right
-	// g.vertices[g.written+8] = right
-	// g.vertices[g.written+10] = right
-
-	// g.written += 12
 	if g.written >= len(g.coords) {
 		g.Flush()
 	}

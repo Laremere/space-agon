@@ -17,7 +17,6 @@ package protostream
 import (
 	"github.com/golang/protobuf/proto"
 	"io"
-	// "log"
 )
 
 type ReaderWriter interface {
@@ -51,14 +50,11 @@ func (p *ProtoStream) Send(m proto.Message) error {
 }
 
 func (p *ProtoStream) Recv(m proto.Message) error {
-	// log.Println("starting recv")
 	vLength := 0
 	mLength := uint64(0)
 	for {
 		mLength, vLength = proto.DecodeVarint(p.b[:p.read])
-		// log.Println("vlength", vLength, "mlength", mLength)
 		if vLength != 0 {
-			// log.Println("breaking")
 			break
 		}
 		n, err := p.rw.Read(p.b[p.read:])
@@ -70,14 +66,12 @@ func (p *ProtoStream) Recv(m proto.Message) error {
 
 	total := vLength + int(mLength)
 
-	// log.Println("len pb", len(p.b), "total", total)
 	if len(p.b) < total {
 		old := p.b[:p.read]
 		p.b = make([]byte, total)
 		copy(p.b, old)
 	}
 	for p.read < total {
-		// log.Println("read", p.read, "total", total)
 		n, err := p.rw.Read(p.b[p.read:])
 		if err != nil {
 			return err
