@@ -67,7 +67,7 @@ func newDedicated(waitForEmpty *sync.WaitGroup) websocket.Handler {
 	inp := game.NewInput()
 	inp.IsRendered = false
 	inp.IsPlayer = false
-	inp.IsHost = false
+	inp.IsHost = true
 
 	d.nextCid <- 1
 

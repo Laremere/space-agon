@@ -305,6 +305,7 @@ func (g *Game) Step(input *Input) {
 			i.Require(SpriteKey)
 			i.Require(AffectedByGravityKey)
 			i.Require(LookupKey)
+			i.Require(CanExplodeKey)
 			i.Require(MissileDetailsKey)
 
 			i.New()
