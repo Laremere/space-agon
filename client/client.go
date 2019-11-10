@@ -17,13 +17,15 @@
 package main
 
 import (
+	"errors"
+	"io"
 	"log"
 	"sync"
 	"syscall/js"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/googleforgames/space-agon/game"
 	"github.com/googleforgames/space-agon/game/pb"
+	"github.com/googleforgames/space-agon/game/protostream"
 	"google.golang.org/grpc/status"
 	ompb "open-match.dev/open-match/pkg/pb"
 )
@@ -120,167 +122,101 @@ type client struct {
 	lock          sync.Mutex
 	sending       chan []*pb.Memo
 	recieving     chan []*pb.Memo
-	initialized   bool
 }
 
 func (c *client) connect(addr string) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	// log.Println("connect start")
+	// defer log.Println("connect end")
 
-	c.initialized = false
-
-	if c.sending != nil {
-		close(c.sending)
+	wws, err := NewWrappedWebSocket("ws://" + addr + "/connect/")
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	c.sending = make(chan []*pb.Memo, 1)
-	c.recieving = make(chan []*pb.Memo, 1)
-
-	// for id, conn := range c.inp.Conns {
-	// 	close(conn.Sending)
-	// 	delete(c.inp.Conns, id)
-	// }
-
-	// serverConn := game.NewNetworkConnection()
-	// c.inp.Conns[0] = serverConn
-	ws := js.Global().Get("WebSocket").New("ws://" + addr + "/connect/")
-
-	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("Websocket onopen!", args[0].Get("toString"))
-		return nil
-	}))
-
-	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		// log.Println("Websocket onmessage!", args[0].Get("data").String())
-		if !c.initialized {
-			clientInitialize := &pb.ClientInitialize{}
-			buf := proto.NewBuffer([]byte(args[0].Get("data").String()))
-			err := buf.DecodeMessage(clientInitialize)
-			if err != nil {
-				log.Printf("Recieving had Unmarshal error %v", err)
-				// TOOD: Disconnect, display error, etc.
-				return nil
-			}
-
-			c.initialize(ws, clientInitialize)
-			return nil
-		}
-
-		memos := &pb.Memos{}
-
-		buf := proto.NewBuffer([]byte(args[0].Get("data").String()))
-		err := buf.DecodeMessage(memos)
-		if err != nil {
-			log.Printf("Recieving had Unmarshal error %v", err)
-			// TOOD: Disconnect, display error, etc.
-			return nil
-		}
-
-		combineToSend(c.recieving, memos.Memos)
-
-		// v := game.NewNetworkUpdate()
-		// err := json.Unmarshal([]byte(args[0].Get("data").String()), v)
-		// if err != nil {
-		// 	log.Printf("Recieving had Unmarshal error %v", err)
-		// 	return nil
-		// }
-		// game.NetworkUpdateCombineAndPass(serverConn.Recieving, v)
-		return nil
-	}))
-
-	ws.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("Websocket error!", args[0].Call("toString"))
-		return nil
-	}))
-
-	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("Websocket closed!", args[0].Call("toString"))
-		return nil
-	}))
-
-	c.inp.IsConnected = true
-}
-
-func (c *client) initialize(ws js.Value, clientInitialize *pb.ClientInitialize) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	c.initialized = true
-	c.inp.Cid = clientInitialize.Cid
-
-	c.g = game.NewGame()
+	stream := protostream.NewProtoStream(wws)
 
 	go func() {
-		buf := proto.NewBuffer(nil)
+		// log.Println("init start")
+		// defer log.Println("init end")
 
-		for toSend := range c.sending {
-			err := buf.EncodeMessage(&pb.Memos{Memos: toSend})
+		{
+			clientInitialize := &pb.ClientInitialize{}
+			err := stream.Recv(clientInitialize)
 			if err != nil {
-				log.Printf("Sending had Marshal error %v", err)
-				// TODO: Disconnect, display error, etc.
-				return
+				log.Println("Failed to initialize client:", err)
 			}
-			ws.Call("send", string(buf.Bytes()))
 
-			buf.Reset()
+			c.lock.Lock()
+			defer c.lock.Unlock()
+
+			c.inp.IsConnected = true
+			c.inp.Cid = clientInitialize.Cid
+			c.g = game.NewGame()
+
+			if c.sending != nil {
+				close(c.sending)
+			}
+			c.sending = make(chan []*pb.Memo, 1)
+			c.recieving = make(chan []*pb.Memo, 1)
+
 		}
+		go func() {
+			var err error
+			for err == nil {
+				toSend := <-c.sending
+				err = stream.Send(&pb.Memos{Memos: toSend})
+			}
+			log.Println("Error sending memos:", err)
+			for range c.sending {
+			}
+		}()
 
-		// for toSend := range serverConn.Sending {
-		// 	b, err := json.Marshal(toSend)
-		// 	if err != nil {
-		// 		log.Printf("Sending had Marshal error %v", err)
-		// 		return
-		// 	}
-		// 	ws.Call("send", string(b))
-		// }
+		go func() {
+			// log.Println("running recv")
+			for {
+				memos := &pb.Memos{}
+				err := stream.Recv(memos)
+				if err != nil {
+					log.Println("Error recieving from stream: ", err.Error())
+					return
+				}
+				combineToSend(c.recieving, memos.Memos)
+			}
+		}()
 	}()
-
 }
 
 func (c *client) matchmake() {
 	addr := js.Global().Get("window").Get("location").Get("host").String()
-	ws := js.Global().Get("WebSocket").New("ws://" + addr + "/matchmake/")
 
-	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("Matchmaking Websocket onopen!", args[0].Get("toString"))
-		return nil
-	}))
-
-	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("Matchmaking Websocket onmessage!")
-
-		a := &ompb.Assignment{}
-		err := proto.Unmarshal([]byte(args[0].Get("data").String()), a)
-		if err != nil {
-			log.Println("Error Unmarshaling assignment:", err)
-			return nil
-		}
-
-		if a.Error != nil {
-			err := status.FromProto(a.Error).Err()
+	wws, err := NewWrappedWebSocket("ws://" + addr + "/matchmake/")
+	if err != nil {
+		log.Fatal(err)
+	}
+	stream := protostream.NewProtoStream(wws)
+	go func() {
+		defer wws.Close()
+		for {
+			a := &ompb.Assignment{}
+			err := stream.Recv(a)
 			if err != nil {
-				// TODO: Display error
-				log.Println("Error on assignment:", err)
-				return nil
+				log.Println("Error receiving assignment:", err)
+			}
+
+			if a.Error != nil {
+				err := status.FromProto(a.Error).Err()
+				if err != nil {
+					// TODO: Display error
+					log.Println("Error on assignment:", err)
+					return
+				}
+			}
+
+			if a.Connection != "" {
+				go c.connect(a.Connection)
+				return
 			}
 		}
-
-		if a.Connection != "" {
-			ws.Call("close")
-			c.connect(a.Connection)
-		}
-		return nil
-	}))
-
-	ws.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("Matchmaking Websocket error!", args[0].Call("toString"))
-		return nil
-	}))
-
-	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		log.Println("Matchmaking Websocket closed!", args[0].Call("toString"))
-		return nil
-	}))
+	}()
 }
 
 func (c *client) scheduleFrame() {
@@ -392,76 +328,155 @@ func (c *client) frame() {
 	c.scheduleFrame()
 }
 
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+
 type WrappedWebSocket struct {
-	open     chan struct{}
-	closed   chan struct{}
-	hasError chan struct{}
-	messages chan []byte
-	err      error
+	r         *io.PipeReader
+	w         *io.PipeWriter
+	ws        js.Value
+	open      chan struct{}
+	closeLock sync.Mutex
+	closed    chan struct{}
 }
 
-// func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
-// 	w := &WrappedWebSocket{
-// 		open:   make(chan struct{}),
-// 		closed: make(chan struct{}),
-// 		hasErr: make(chan struct{}),
-// 	}
+var errWritingOnClosed = errors.New("Writing on closed WrappedWebSocket")
 
-// 	ws := js.Global().Get("WebSocket").New(addr)
+func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
+	ws := js.Global().Get("WebSocket").New(addr)
 
-// 	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-// 		close(w.open)
-// 		// go func() {
-// 		// 	log.Println("Websocket onopen!", args[0].Get("toString"))
+	r, w := io.Pipe()
+	wws := &WrappedWebSocket{
+		r:      r,
+		w:      w,
+		ws:     ws,
+		open:   make(chan struct{}),
+		closed: make(chan struct{}),
+	}
 
-// 		// 	for toSend := range serverConn.Sending {
-// 		// 		b, err := json.Marshal(toSend)
-// 		// 		if err != nil {
-// 		// 			log.Printf("Sending had Marshal error %v", err)
-// 		// 			return
-// 		// 		}
-// 		// 		ws.Call("send", string(b))
-// 		// 	}
-// 		// }()
-// 		return nil
-// 	}))
+	ws.Set("onopen", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		close(wws.open)
+		return nil
+	}))
 
-// 	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-// 		// // log.Println("Websocket onmessage!", args[0].Get("data").String())
+	blobCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		// js.Global().Get("console").Call("log", args[0])
+		// data := args[0].Get("data")
+		data := js.Global().Get("Uint8Array").New(args[0])
+		// js.Global().Get("console").Call("log", data)
 
-// 		// v := game.NewNetworkUpdate()
-// 		// err := json.Unmarshal([]byte(args[0].Get("data").String()), v)
-// 		// if err != nil {
-// 		// 	log.Printf("Recieving had Unmarshal error %v", err)
-// 		// 	return nil
-// 		// }
-// 		// game.NetworkUpdateCombineAndPass(serverConn.Recieving, v)
-// 		return nil
-// 	}))
+		// log.Println("data type:", data.Type().String())
+		length := data.Length()
+		// log.Println("Legnth:", length)
+		// log.Println("Data:", data)
+		b := make([]byte, length)
 
-// 	ws.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-// 		// log.Println("Websocket error!", args[0].Call("toString"))
-// 		return nil
-// 	}))
+		js.CopyBytesToGo(b, data)
+		// b := []byte(data.String())
 
-// 	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-// 		// log.Println("Websocket closed!", args[0].Call("toString"))
-// 		return nil
-// 	}))
+		// log.Println("writing to pipe")
+		_, err := wws.w.Write(b)
+		// log.Println("done writing to pipe")
+		if err != nil {
+			log.Println("Error in onmessage on ", addr, ":", err)
+		}
+		return nil
+	})
 
-// 	switch {
-// 	case <-w.open:
-// 		return w, nil
-// 	case <-w.hasErr:
-// 		return nil, w.err
-// 	}
-// }
+	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		// js.Global().Get("console").Call("log", args[0])
+		data := args[0].Get("data")
 
-// func (w *WrappedWebSocket) Send(b []byte) error {
+		data.Call("arrayBuffer").Call("then", blobCallback)
 
-// }
+		// log.Println("data type:", data.Type().String())
+		// length := data.Length()
+		// log.Println("Legnth:", length)
+		// log.Println("Data:", data)
+		// b := make([]byte, length)
 
-// func (w *WrappedWebSocket) Recv() ([]byte, error) {
+		// js.CopyBytesToGo(b, data)
+		// // b := []byte(data.String())
+
+		// // log.Println("writing to pipe")
+		// _, err := wws.w.Write(b)
+		// // log.Println("done writing to pipe")
+		// if err != nil {
+		// 	log.Println("Error in onmessage on ", addr, ":", err)
+		// }
+		return nil
+	}))
+
+	ws.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Websocket error: addr=", addr, " error=", args[0].Call("toString"))
+		wws.Close()
+		select {
+		case <-wws.open:
+		default:
+			close(wws.open)
+		}
+		return nil
+	}))
+
+	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Websocket closed: ", addr)
+		wws.Close()
+		return nil
+	}))
+
+	// Consider: waiting for open? However then this caller would need to ensure
+	// that it doesn't block JS's event loop.
+
+	return wws, nil
+}
+
+func (wws *WrappedWebSocket) Read(b []byte) (n int, err error) {
+	// log.Println("reading from pipe")
+	// defer log.Println("done reading from pipe")
+	return wws.r.Read(b)
+}
+
+func (wws *WrappedWebSocket) Write(b []byte) (n int, err error) {
+	defer func() {
+		r := recover()
+		if r != nil {
+			panic("Recovered in write!")
+		}
+	}()
+
+	select {
+	case <-wws.open:
+	}
+
+	select {
+	case <-wws.closed:
+		return 0, errWritingOnClosed
+	default:
+	}
+
+	data := js.Global().Get("Uint8Array").New(len(b))
+	js.CopyBytesToJS(data, b)
+
+	wws.ws.Call("send", data)
+	return len(b), nil
+}
+
+func (wws *WrappedWebSocket) Close() error {
+	wws.closeLock.Lock()
+	defer wws.closeLock.Unlock()
+
+	select {
+	case <-wws.closed:
+		return nil
+	default:
+	}
+
+	wws.w.Close()
+	close(wws.closed)
+	wws.ws.Call("close")
+	return nil
+}
 
 // }
 

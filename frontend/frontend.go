@@ -16,12 +16,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"io"
 	"log"
 	"net/http"
 
-	"github.com/golang/protobuf/proto"
+	"github.com/googleforgames/space-agon/game/protostream"
 	"golang.org/x/net/websocket"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
@@ -49,6 +48,7 @@ func main() {
 
 func matchmake(ws *websocket.Conn) {
 	ctx := ws.Request().Context()
+	wsstream := protostream.NewProtoStream(ws)
 
 	conn, err := grpc.Dial("om-frontend.open-match.svc.cluster.local:50504", grpc.WithInsecure())
 	if err != nil {
@@ -84,7 +84,11 @@ func matchmake(ws *websocket.Conn) {
 
 		stream, err := fe.GetAssignments(ctx, req)
 		if err != nil {
-			logAndSendError(ws, err)
+			log.Println("Error streaming assignment:", err)
+			err = wsstream.Send(&pb.Assignment{Error: status.Convert(err).Proto()})
+			if err != nil {
+				log.Println("Error sending error:", err)
+			}
 			return
 		}
 		for {
@@ -93,39 +97,19 @@ func matchmake(ws *websocket.Conn) {
 				return
 			}
 			if err != nil {
-				logAndSendError(ws, err)
+				log.Println("Error streaming assignment:", err)
+				err = wsstream.Send(&pb.Assignment{Error: status.Convert(err).Proto()})
+				if err != nil {
+					log.Println("Error sending error:", err)
+				}
 				return
 			}
 
-			err = sendAssignment(ws, resp.Assignment)
+			err = wsstream.Send(resp.Assignment)
 			if err != nil {
 				log.Println("Error sending updated assignment:", err)
 				return
 			}
 		}
 	}
-}
-
-func logAndSendError(ws *websocket.Conn, err error) {
-	log.Println("Error streaming assignment:", err)
-	err = sendAssignment(ws, &pb.Assignment{Error: status.Convert(err).Proto()})
-	if err != nil {
-		log.Println("Error sending error:", err)
-	}
-}
-
-func sendAssignment(ws *websocket.Conn, a *pb.Assignment) error {
-	b, err := proto.Marshal(a)
-	if err != nil {
-		return err
-	}
-
-	n, err := ws.Write(b)
-	if err != nil {
-		return err
-	}
-	if n != len(b) {
-		return errors.New("Wrong number of bytes sent to websocket.")
-	}
-	return nil
 }

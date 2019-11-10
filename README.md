@@ -140,3 +140,22 @@ ESC_TAG=$(echo $TAG | sed -e 's/\\/\\\\/g; s/\//\\\//g; s/&/\\\&/g') && \
 sed -E 's/image: (.*)\/([^\/]*):(.*)/image: '$ESC_REGISTRY'\/\2:'$ESC_TAG'/' deploy_template.yaml > deploy.yaml && \
 kubectl apply -f deploy.yaml
 ```
+
+Run locally
+```
+# Gameserver - RUN FIRST
+
+go generate github.com/googleforgames/space-agon/game/generation && \
+docker run --rm --mount type=bind,source="$(pwd)",target=/workdir/mount build-protos && \
+go test github.com/googleforgames/space-agon/... && \
+docker build . -f Dedicated.Dockerfile -t space-agon-dedicated && \
+docker run -p 127.0.0.1:2156:2156/tcp -e DISABLE_AGONES=true space-agon-dedicated
+
+# Frontend - RUN SECOND
+
+GOOS=js GOARCH=wasm go test github.com/googleforgames/space-agon/client/... && \
+go test github.com/googleforgames/space-agon/... && \
+docker build . -f Frontend.Dockerfile -t space-agon-frontend && \
+docker run -p 127.0.0.1:2157:8080/tcp space-agon-frontend
+
+```

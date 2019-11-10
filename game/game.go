@@ -15,6 +15,7 @@
 package game
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
 
@@ -75,7 +76,7 @@ func (k *Keystate) Up() {
 func getNid(g *Game, i *Iter, nid uint64) {
 	lookup, ok := g.NetworkIds[nid]
 	if !ok || !lookup.Alive() {
-		panic("Destory non-existant")
+		panic(fmt.Sprintf("nid %d lookup failed", nid))
 	}
 	i.Get(lookup)
 }
