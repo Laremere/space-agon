@@ -43,6 +43,9 @@ message Memo {
     // TODO: Remove
     SpawnEvent spawn_event = 15;
     DestroyEvent destroy_event = 16;
+
+    ShootMissile shoot_missile = 17;
+    SpawnMissile spawn_missile = 18;
   }
 }
 
@@ -81,7 +84,7 @@ message SpawnEvent {
   enum SpawnType {
     UNKNOWN = 0;
     SHIP = 1;
-    MISSILE = 2;
+    //MISSILE = 2;
     EXPLOSION = 3;
   }
 
@@ -92,3 +95,21 @@ message DestroyEvent {
   uint64 nid = 1;
 }
 
+message ShootMissile {
+  uint64 owner = 1;
+}
+
+// Server is always authority
+message SpawnMissile {
+  uint64 nid = 6;
+  uint64 owner = 1;
+  vec2 pos = 2;
+  vec2 momentum = 3;
+  float rot = 4;
+  float spin = 5;
+}
+
+message vec2 {
+  float x = 1;
+  float y = 2;
+}

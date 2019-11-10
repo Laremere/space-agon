@@ -50,8 +50,6 @@ func main() {
 type dedicated struct {
 	g *game.Game
 
-	inp *game.Input
-
 	nextCid chan int64
 
 	mr *memoRouter
@@ -63,22 +61,33 @@ func newDedicated(waitForEmpty *sync.WaitGroup) websocket.Handler {
 	d := &dedicated{
 		g:            game.NewGame(),
 		nextCid:      make(chan int64, 1),
-		inp:          game.NewInput(),
 		mr:           newMemoRouter(),
 		waitForEmpty: waitForEmpty,
 	}
-	d.inp.IsRendered = false
-	d.inp.IsPlayer = false
-	d.inp.IsHost = false
+	inp := game.NewInput()
+	inp.IsRendered = false
+	inp.IsPlayer = false
+	inp.IsHost = false
 
 	d.nextCid <- 1
 
 	go func() {
-		time.Sleep(15 * time.Second)
+		toSend, receive := d.mr.connect(0)
+
 		last := time.Now()
 		for t := range time.Tick(time.Second / 60) {
-			d.inp.Dt = float32(t.Sub(last).Seconds())
-			d.g.Step(d.inp)
+			select {
+			case inp.Memos = <-toSend:
+			default:
+				inp.Memos = nil
+			}
+
+			inp.Dt = float32(t.Sub(last).Seconds())
+			last = t
+			d.g.Step(inp)
+
+			receive(inp.MemosOut)
+			inp.MemosOut = nil
 		}
 	}()
 

@@ -14,7 +14,10 @@
 
 package game
 
-import "math"
+import (
+	"github.com/googleforgames/space-agon/game/pb"
+	"math"
+)
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -33,6 +36,17 @@ const (
 )
 
 type Vec2 [2]float32
+
+func (v *Vec2) ToProto() *pb.Vec2 {
+	return &pb.Vec2{
+		X: v[0],
+		Y: v[1],
+	}
+}
+
+func Vec2FromProto(p *pb.Vec2) Vec2 {
+	return Vec2{p.X, p.Y}
+}
 
 func Vec2FromRadians(rad float32) Vec2 {
 	sin, cos := math.Sincos(float64(rad))

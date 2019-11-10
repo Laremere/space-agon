@@ -159,7 +159,7 @@ const (
 	MissileDetailsKey    = CompKey(iota)
 	MomentumKey          = CompKey(iota)
 	NetworkIdKey         = CompKey(iota)
-	NetworkRecieveKey    = CompKey(iota)
+	NetworkReceiveKey    = CompKey(iota)
 	NetworkTransmitKey   = CompKey(iota)
 	ParticleSunDeleteKey = CompKey(iota)
 	PointRenderKey       = CompKey(iota)

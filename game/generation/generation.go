@@ -42,7 +42,7 @@ var components = map[string]string{
 	"CanExplode":        "",
 	"FrameEndDelete":    "",
 	"KeepInCamera":      "",
-	"NetworkRecieve":    "",
+	"NetworkReceive":    "",
 	"NetworkTransmit":   "",
 	"ParticleSunDelete": "",
 	"PointRender":       "",
