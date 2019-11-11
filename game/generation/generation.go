@@ -23,14 +23,14 @@ import (
 )
 
 var components = map[string]string{
-	"ExplosionDetails": "ExplosionDetails",
-	"Lookup":           "Lookup",
-	"MissileDetails":   "MissileDetails",
-	"Momentum":         "Vec2",
-	"NetworkId":        "uint64",
-	"Pos":              "Vec2",
-	"Rot":              "float32",
-	"ShipControl":      "ShipControl",
+	// "ExplosionDetails": "ExplosionDetails",
+	"Lookup":         "Lookup",
+	"MissileDetails": "MissileDetails",
+	"Momentum":       "Vec2",
+	"NetworkId":      "uint64",
+	"Pos":            "Vec2",
+	"Rot":            "float32",
+	"ShipControl":    "ShipControl",
 	// "SpawnEvent":       "SpawnType",
 	"Spin":         "float32",
 	"Sprite":       "Sprite",
@@ -49,12 +49,12 @@ var components = map[string]string{
 }
 
 var typeLiterals = map[string]string{
-	"ExplosionDetails": "ExplosionDetails{Initialized: false}",
-	"float32":          "0",
-	"uint64":           "0",
-	"Lookup":           "<Lookup is special, this should be never invoked>",
-	"SpawnType":        "0",
-	"Sprite":           "SpriteUnset",
+	// "ExplosionDetails": "ExplosionDetails{Initialized: false}",
+	"float32":   "0",
+	"uint64":    "0",
+	"Lookup":    "<Lookup is special, this should be never invoked>",
+	"SpawnType": "0",
+	"Sprite":    "SpriteUnset",
 }
 
 func main() {

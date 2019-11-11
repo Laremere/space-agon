@@ -50,20 +50,6 @@ func (c *comp_Lookup) RemoveLast() {
 	*c = (*c)[:j]
 }
 
-type comp_ExplosionDetails []ExplosionDetails
-
-func (c *comp_ExplosionDetails) Swap(j1, j2 int) {
-	(*c)[j1], (*c)[j2] = (*c)[j2], (*c)[j1]
-}
-
-func (c *comp_ExplosionDetails) Extend(i int) {
-	*c = append(*c, ExplosionDetails{Initialized: false})
-}
-
-func (c *comp_ExplosionDetails) RemoveLast() {
-	*c = (*c)[:len(*c)-1]
-}
-
 type comp_MissileDetails []MissileDetails
 
 func (c *comp_MissileDetails) Swap(j1, j2 int) {
@@ -152,7 +138,6 @@ const (
 	AffectedByGravityKey = CompKey(iota)
 	BoundLocationKey     = CompKey(iota)
 	CanExplodeKey        = CompKey(iota)
-	ExplosionDetailsKey  = CompKey(iota)
 	FrameEndDeleteKey    = CompKey(iota)
 	KeepInCameraKey      = CompKey(iota)
 	LookupKey            = CompKey(iota)
@@ -179,18 +164,17 @@ type EntityBag struct {
 	comps    []Comp
 	compsKey compsKey
 
-	ExplosionDetails *comp_ExplosionDetails
-	Lookup           *comp_Lookup
-	MissileDetails   *comp_MissileDetails
-	Momentum         *comp_Vec2
-	NetworkId        *comp_uint64
-	Pos              *comp_Vec2
-	Rot              *comp_float32
-	ShipControl      *comp_ShipControl
-	Spin             *comp_float32
-	Sprite           *comp_Sprite
-	TimedDestroy     *comp_float32
-	TimedExplode     *comp_float32
+	Lookup         *comp_Lookup
+	MissileDetails *comp_MissileDetails
+	Momentum       *comp_Vec2
+	NetworkId      *comp_uint64
+	Pos            *comp_Vec2
+	Rot            *comp_float32
+	ShipControl    *comp_ShipControl
+	Spin           *comp_float32
+	Sprite         *comp_Sprite
+	TimedDestroy   *comp_float32
+	TimedExplode   *comp_float32
 }
 
 func newEntityBag(compsKey *compsKey) *EntityBag {
@@ -198,11 +182,6 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 		count:    0,
 		comps:    nil,
 		compsKey: *compsKey,
-	}
-
-	if inRequirement(compsKey, ExplosionDetailsKey) {
-		bag.ExplosionDetails = &comp_ExplosionDetails{}
-		bag.comps = append(bag.comps, bag.ExplosionDetails)
 	}
 
 	if inRequirement(compsKey, LookupKey) {
@@ -261,14 +240,6 @@ func newEntityBag(compsKey *compsKey) *EntityBag {
 	}
 
 	return bag
-}
-
-func (iter *Iter) ExplosionDetails() *ExplosionDetails {
-	comp := iter.e.bags[iter.i].ExplosionDetails
-	if comp == nil {
-		return nil
-	}
-	return &(*comp)[iter.j]
 }
 
 func (iter *Iter) Lookup() *Lookup {

@@ -228,6 +228,15 @@ func (c *client) scheduleFrame() {
 
 		c.frame()
 
+		// Currently sending to server, which sends back to client.
+		// selfSend := []*pb.Memo{}
+		// for _, memo := range c.inp.MemosOut {
+		// 	if isMemoRecipient(c.inp.Cid, memo) {
+		// 		selfSend = append(selfSend, memo)
+		// 	}
+		// 	combineToSend(c.recieving, selfSend)
+		// }
+
 		if c.sending != nil {
 			combineToSend(c.sending, c.inp.MemosOut)
 		}
@@ -447,4 +456,16 @@ func combineToSend(c chan []*pb.Memo, memos []*pb.Memo) {
 		c <- previousMemos
 	case c <- memos:
 	}
+}
+
+func isMemoRecipient(cid int64, memo *pb.Memo) bool {
+	switch r := memo.Recipient.(type) {
+	case *pb.Memo_To:
+		return cid == r.To
+	case *pb.Memo_EveryoneBut:
+		return cid != r.EveryoneBut
+	case *pb.Memo_Everyone:
+		return true
+	}
+	panic("Unknown recipient type")
 }

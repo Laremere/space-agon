@@ -146,14 +146,20 @@ func (i *Input) SendMemo(partial *pb.Memo, actual proto.Message) {
 		partial.Actual = &pb.Memo_SpinTracks{SpinTracks: a}
 	case *pb.ShipControlTrack:
 		partial.Actual = &pb.Memo_ShipControlTrack{ShipControlTrack: a}
-	case *pb.SpawnEvent:
-		partial.Actual = &pb.Memo_SpawnEvent{SpawnEvent: a}
+	// case *pb.SpawnEvent:
+	// 	partial.Actual = &pb.Memo_SpawnEvent{SpawnEvent: a}
 	case *pb.DestroyEvent:
 		partial.Actual = &pb.Memo_DestroyEvent{DestroyEvent: a}
 	case *pb.ShootMissile:
 		partial.Actual = &pb.Memo_ShootMissile{ShootMissile: a}
 	case *pb.SpawnMissile:
 		partial.Actual = &pb.Memo_SpawnMissile{SpawnMissile: a}
+	case *pb.SpawnExplosion:
+		partial.Actual = &pb.Memo_SpawnExplosion{SpawnExplosion: a}
+	case *pb.SpawnShip:
+		partial.Actual = &pb.Memo_SpawnShip{SpawnShip: a}
+	case *pb.RegisterPlayer:
+		partial.Actual = &pb.Memo_RegisterPlayer{RegisterPlayer: a}
 	default:
 		panic("Unknown memo actual type")
 	}
@@ -192,27 +198,27 @@ func (g *Game) Step(input *Input) {
 				i.Remove()
 			}
 
-		case *pb.Memo_SpawnEvent:
-			spawnEvent := actual.SpawnEvent
+		// case *pb.Memo_SpawnEvent:
+		// 	spawnEvent := actual.SpawnEvent
 
-			i := g.E.NewIter()
-			i.Require(LookupKey)
-			i.Require(NetworkReceiveKey)
+		// 	i := g.E.NewIter()
+		// 	i.Require(LookupKey)
+		// 	i.Require(NetworkReceiveKey)
 
-			switch spawnEvent.SpawnType {
-			case pb.SpawnEvent_SHIP:
-				spawnSpaceship(i)
-			// case pb.SpawnEvent_MISSILE:
-			// 	spawnMissile(i)
-			case pb.SpawnEvent_EXPLOSION:
-				spawnExplosion(i)
-			default:
-				log.Println("Asked to spawn", spawnEvent.SpawnType)
-				panic("Spawn what now?")
-			}
+		// 	switch spawnEvent.SpawnType {
+		// 	case pb.SpawnEvent_SHIP:
+		// 		spawnSpaceship(i)
+		// 	// case pb.SpawnEvent_MISSILE:
+		// 	// 	spawnMissile(i)
+		// 	// case pb.SpawnEvent_EXPLOSION:
+		// 	// 	spawnExplosion(i)
+		// 	default:
+		// 		log.Println("Asked to spawn", spawnEvent.SpawnType)
+		// 		panic("Spawn what now?")
+		// 	}
 
-			*i.NetworkId() = spawnEvent.Nid
-			g.NetworkIds[spawnEvent.Nid] = i.Lookup()
+		// 	*i.NetworkId() = spawnEvent.Nid
+		// 	g.NetworkIds[spawnEvent.Nid] = i.Lookup()
 
 		case *pb.Memo_PosTracks:
 			posTracks := actual.PosTracks
@@ -323,54 +329,115 @@ func (g *Game) Step(input *Input) {
 			*i.Sprite() = SpriteMissile
 			i.MissileDetails().Owner = g.NetworkIds[spawnMissile.Owner]
 
-			///////////
-			///////////
-			///////////
-			///////////
-			///////////
-			///////////
-			///////////
-			///////////
-			///////////
-			///////////
-			///////////
-			///////////
-			// log.Println("Shoot missile received.")
-			// im.Require(NetworkTransmitKey)
-			// im.Require(TimedExplodeKey)
-			// //			i.Require(NetworkReceiveKey)
-			// //from spawn
+		case *pb.Memo_SpawnExplosion:
+			spawnExplosion := actual.SpawnExplosion
 
-			// i.Require(PosKey)
-			// i.Require(RotKey)
-			// i.Require(SpinKey)
-			// i.Require(MomentumKey)
-			// i.Require(SpriteKey)
-			// i.Require(AffectedByGravityKey)
-			// i.Require(NetworkIdKey)
-			// i.Require(MissileDetailsKey)
-			// i.Require(CanExplodeKey)
-			// i.Require(LookupKey)
-			// i.New()
+			pos := Vec2FromProto(spawnExplosion.Pos)
+			momentum := Vec2FromProto(spawnExplosion.Momentum)
 
-			// *i.Sprite() = SpriteMissile
-			// //end from spawn
-			// im.MissileDetails().Owner = i.Lookup()
-			// *im.TimedExplode() = 2
-			// *im.Pos() = *i.Pos()
-			// *im.Rot() = *i.Rot()
-			// *im.Spin() = *i.Spin()
-			// const MissileSpeed = 10
-			// *im.Momentum() = *i.Momentum()
-			// im.Momentum().AddEqual(Vec2FromRadians(*i.Rot()).Scale(MissileSpeed))
+			if input.IsHost {
+				i := g.E.NewIter()
+				i.Require(PosKey)
+				i.Require(CanExplodeKey)
+				i.Require(NetworkIdKey)
 
-			// *im.NetworkId() = g.NextNetworkId
+				for i.Next() {
+					diff := pos.Sub(*i.Pos())
+					if diff.Length() < 1 {
+						iMomentum := Vec2{}
+						if i.Momentum() != nil {
+							iMomentum = *i.Momentum()
+						}
+						input.BroadcastOthers(&pb.DestroyEvent{
+							Nid: *i.NetworkId(),
+						})
+						input.BroadcastAll(&pb.SpawnExplosion{
+							Pos:      i.Pos().ToProto(),
+							Momentum: iMomentum.ToProto(),
+						})
+						i.Remove()
+					}
+				}
+			}
+
+			if input.IsRendered { // explosion fun :D
+				i := g.E.NewIter() // particle iter
+				i.Require(PosKey)
+				i.Require(MomentumKey)
+				i.Require(TimedDestroyKey)
+				i.Require(PointRenderKey)
+				i.Require(ParticleSunDeleteKey)
+
+				for j := 0; j < 1000; j++ {
+					speed := rand.Float32()*10 + 0.01
+					dir := rand.Float32() * math.Pi * 2
+					ttl := 1.0/speed + rand.Float32()
+					if ttl > 3 {
+						ttl = 3
+					}
+
+					i.New()
+					*i.Pos() = pos
+					*i.Momentum() = momentum.Add(Vec2FromRadians(dir).Scale(speed))
+					*i.TimedDestroy() = ttl
+				}
+			}
+
+		case *pb.Memo_SpawnShip:
+			spawnShip := actual.SpawnShip
+
+			i := g.E.NewIter()
+			if spawnShip.Authority == input.Cid {
+				i.Require(NetworkTransmitKey)
+			} else {
+				i.Require(NetworkReceiveKey)
+			}
+
+			i.Require(PosKey)
+			i.Require(RotKey)
+			i.Require(SpriteKey)
+			i.Require(KeepInCameraKey)
+			i.Require(SpinKey)
+			i.Require(MomentumKey)
+			i.Require(ShipControlKey)
+			i.Require(LookupKey)
+			i.Require(AffectedByGravityKey)
+			i.Require(NetworkIdKey)
+			i.Require(BoundLocationKey)
+			i.Require(CanExplodeKey)
+			i.New()
+
+			*i.Sprite() = SpriteShip
+			*i.Pos() = Vec2FromProto(spawnShip.Pos)
+			*i.Momentum() = Vec2FromProto(spawnShip.Momentum)
+			*i.Rot() = spawnShip.Rot
+			*i.Spin() = spawnShip.Spin
+			// pos := i.Pos()
+			// (*pos)[0] = 7
+			// (*pos)[1] = 0
+			// (*i.Momentum())[1] = 5
+			// *i.Rot() = 0
+			// *i.NetworkId() = g.NextNetworkId
 			// g.NextNetworkId++
 
-			// input.BroadcastOthers(&pb.SpawnEvent{
-			// 	Nid:       uint64(*im.NetworkId()),
-			// 	SpawnType: pb.SpawnEvent_MISSILE,
-			// })
+			*i.NetworkId() = spawnShip.Nid
+			g.NetworkIds[spawnShip.Nid] = i.Lookup()
+
+			if spawnShip.Authority == input.Cid {
+				g.ControlledShip = i.Lookup()
+			}
+
+		case *pb.Memo_RegisterPlayer:
+			registerPlayer := actual.RegisterPlayer
+
+			input.BroadcastAll(&pb.SpawnShip{
+				Nid:       g.NextNid(),
+				Authority: registerPlayer.Cid,
+				Pos:       (&Vec2{7, 0}).ToProto(),
+				Momentum:  (&Vec2{0, 5}).ToProto(),
+				Rot:       0,
+				Spin:      0,
+			})
 
 		default:
 			log.Fatal("Unknown message type:", actual)
@@ -416,121 +483,107 @@ func (g *Game) Step(input *Input) {
 
 			if g.timeDead > 4 {
 				g.timeDead = 0
-				i := g.E.NewIter()
-				i.Require(NetworkTransmitKey)
-				spawnSpaceship(i)
 
-				pos := i.Pos()
-				(*pos)[0] = 7
-				(*pos)[1] = 0
-				(*i.Momentum())[1] = 5
-				*i.Rot() = 0
-				*i.NetworkId() = g.NextNetworkId
-				g.NextNetworkId++
-
-				g.ControlledShip = i.Lookup()
-
-				input.BroadcastOthers(&pb.SpawnEvent{
-					Nid:       uint64(*i.NetworkId()),
-					SpawnType: pb.SpawnEvent_SHIP,
+				input.SendTo(0, &pb.RegisterPlayer{
+					Cid: input.Cid,
 				})
 			}
 		}
 	}
 
 	// Explosions cause more explosions
-	for {
-		newExplosions := [][2]Vec2(nil)
-		{
-			i := g.E.NewIter()
-			i.Require(PosKey)
-			i.Require(ExplosionDetailsKey)
+	// for {
+	// 	newExplosions := [][2]Vec2(nil)
+	// 	{
+	// 		i := g.E.NewIter()
+	// 		i.Require(PosKey)
+	// 		i.Require(ExplosionDetailsKey)
 
-			for i.Next() {
-				if !i.ExplosionDetails().MoreExplosions {
-					i.ExplosionDetails().MoreExplosions = true
-					other := g.E.NewIter()
-					other.Require(PosKey)
-					other.Require(LookupKey)
-					other.Require(CanExplodeKey)
-					other.Require(NetworkTransmitKey)
-					for other.Next() {
-						if i.Lookup() == other.Lookup() {
-							continue
-						}
-						diff := i.Pos().Sub(*other.Pos())
-						if diff.Length() < 1 {
-							newExplosions = append(newExplosions, [2]Vec2{*other.Pos(), *other.Momentum()})
-							if other.NetworkId() != nil {
+	// 		for i.Next() {
+	// 			if !i.ExplosionDetails().MoreExplosions {
+	// 				i.ExplosionDetails().MoreExplosions = true
+	// 				other := g.E.NewIter()
+	// 				other.Require(PosKey)
+	// 				other.Require(LookupKey)
+	// 				other.Require(CanExplodeKey)
+	// 				other.Require(NetworkTransmitKey)
+	// 				for other.Next() {
+	// 					if i.Lookup() == other.Lookup() {
+	// 						continue
+	// 					}
+	// 					diff := i.Pos().Sub(*other.Pos())
+	// 					if diff.Length() < 1 {
+	// 						newExplosions = append(newExplosions, [2]Vec2{*other.Pos(), *other.Momentum()})
+	// 						if other.NetworkId() != nil {
 
-								input.BroadcastOthers(&pb.DestroyEvent{
-									Nid: uint64(*other.NetworkId()),
-								})
+	// 							input.BroadcastOthers(&pb.DestroyEvent{
+	// 								Nid: uint64(*other.NetworkId()),
+	// 							})
 
-								other.Remove()
-								break
-							}
-						}
+	// 							other.Remove()
+	// 							break
+	// 						}
+	// 					}
 
-					}
-				}
-			}
+	// 				}
+	// 			}
+	// 		}
 
-			if len(newExplosions) == 0 {
-				break
-			}
+	// 		if len(newExplosions) == 0 {
+	// 			break
+	// 		}
 
-			for _, posMomentum := range newExplosions {
-				ie := g.E.NewIter()
-				ie.Require(NetworkTransmitKey)
-				ie.Require(TimedDestroyKey)
-				spawnExplosion(ie)
-				*ie.Pos() = posMomentum[0]
-				*ie.Momentum() = posMomentum[1]
-				*ie.NetworkId() = g.NextNetworkId
-				*ie.TimedDestroy() = 0.5
-				g.NextNetworkId++
+	// 		for _, posMomentum := range newExplosions {
+	// 			ie := g.E.NewIter()
+	// 			ie.Require(NetworkTransmitKey)
+	// 			ie.Require(TimedDestroyKey)
+	// 			spawnExplosion(ie)
+	// 			*ie.Pos() = posMomentum[0]
+	// 			*ie.Momentum() = posMomentum[1]
+	// 			*ie.NetworkId() = g.NextNetworkId
+	// 			*ie.TimedDestroy() = 0.5
+	// 			g.NextNetworkId++
 
-				input.BroadcastOthers(&pb.SpawnEvent{
-					Nid:       uint64(*ie.NetworkId()),
-					SpawnType: pb.SpawnEvent_EXPLOSION,
-				})
-			}
-		}
-	}
+	// 			input.BroadcastOthers(&pb.SpawnEvent{
+	// 				Nid:       uint64(*ie.NetworkId()),
+	// 				SpawnType: pb.SpawnEvent_EXPLOSION,
+	// 			})
+	// 		}
+	// 	}
+	// }
 
-	if input.IsRendered { // explosion fun :D
-		i := g.E.NewIter()
-		i.Require(PosKey)
-		i.Require(MomentumKey)
-		i.Require(ExplosionDetailsKey)
+	// if input.IsRendered { // explosion fun :D
+	// 	i := g.E.NewIter()
+	// 	i.Require(PosKey)
+	// 	i.Require(MomentumKey)
+	// 	i.Require(ExplosionDetailsKey)
 
-		pi := g.E.NewIter() // particle iter
-		pi.Require(PosKey)
-		pi.Require(MomentumKey)
-		pi.Require(TimedDestroyKey)
-		pi.Require(PointRenderKey)
-		pi.Require(ParticleSunDeleteKey)
+	// 	pi := g.E.NewIter() // particle iter
+	// 	pi.Require(PosKey)
+	// 	pi.Require(MomentumKey)
+	// 	pi.Require(TimedDestroyKey)
+	// 	pi.Require(PointRenderKey)
+	// 	pi.Require(ParticleSunDeleteKey)
 
-		for i.Next() {
-			if !i.ExplosionDetails().Initialized {
-				i.ExplosionDetails().Initialized = true
-				for j := 0; j < 1000; j++ {
-					speed := rand.Float32()*10 + 0.01
-					dir := rand.Float32() * math.Pi * 2
-					ttl := 1.0/speed + rand.Float32()
-					if ttl > 3 {
-						ttl = 3
-					}
+	// 	for i.Next() {
+	// 		if !i.ExplosionDetails().Initialized {
+	// 			i.ExplosionDetails().Initialized = true
+	// 			for j := 0; j < 1000; j++ {
+	// 				speed := rand.Float32()*10 + 0.01
+	// 				dir := rand.Float32() * math.Pi * 2
+	// 				ttl := 1.0/speed + rand.Float32()
+	// 				if ttl > 3 {
+	// 					ttl = 3
+	// 				}
 
-					pi.New()
-					*pi.Pos() = *i.Pos()
-					*pi.Momentum() = i.Momentum().Add(Vec2FromRadians(dir).Scale(speed))
-					*pi.TimedDestroy() = ttl
-				}
-			}
-		}
-	}
+	// 				pi.New()
+	// 				*pi.Pos() = *i.Pos()
+	// 				*pi.Momentum() = i.Momentum().Add(Vec2FromRadians(dir).Scale(speed))
+	// 				*pi.TimedDestroy() = ttl
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	if input.IsRendered { // Spawn sun particles
 		i := g.E.NewIter()
@@ -570,29 +623,17 @@ func (g *Game) Step(input *Input) {
 		i.Require(TimedExplodeKey)
 		i.Require(PosKey)
 		i.Require(MomentumKey)
+		i.Require(NetworkIdKey)
 		for i.Next() {
 			*i.TimedExplode() -= input.Dt
 			if *i.TimedExplode() <= 0 {
-				ie := g.E.NewIter()
-				ie.Require(NetworkTransmitKey)
-				ie.Require(TimedDestroyKey)
-				spawnExplosion(ie)
-				*ie.Pos() = *i.Pos()
-				*ie.Momentum() = *i.Momentum()
-				*ie.NetworkId() = g.NextNetworkId
-				*ie.TimedDestroy() = 0.5
-				g.NextNetworkId++
-
-				input.BroadcastOthers(&pb.SpawnEvent{
-					Nid:       uint64(*ie.NetworkId()),
-					SpawnType: pb.SpawnEvent_EXPLOSION,
+				input.BroadcastOthers(&pb.DestroyEvent{
+					Nid: *i.NetworkId(),
 				})
-
-				if i.NetworkId() != nil {
-					input.BroadcastOthers(&pb.DestroyEvent{
-						Nid: uint64(*i.NetworkId()),
-					})
-				}
+				input.BroadcastAll(&pb.SpawnExplosion{
+					Pos:      i.Pos().ToProto(),
+					Momentum: i.Momentum().ToProto(),
+				})
 				i.Remove()
 			}
 		}
@@ -605,26 +646,13 @@ func (g *Game) Step(input *Input) {
 		i.Require(NetworkTransmitKey)
 		for i.Next() {
 			if i.Pos().Length() < 3 {
-				ie := g.E.NewIter()
-				ie.Require(NetworkTransmitKey)
-				ie.Require(TimedDestroyKey)
-				spawnExplosion(ie)
-				*ie.Pos() = *i.Pos()
-				*ie.Momentum() = *i.Momentum()
-				*ie.NetworkId() = g.NextNetworkId
-				*ie.TimedDestroy() = 0.5
-				g.NextNetworkId++
-
-				input.BroadcastOthers(&pb.SpawnEvent{
-					Nid:       uint64(*ie.NetworkId()),
-					SpawnType: pb.SpawnEvent_EXPLOSION,
+				input.BroadcastOthers(&pb.DestroyEvent{
+					Nid: *i.NetworkId(),
 				})
-
-				if i.NetworkId() != nil {
-					input.BroadcastOthers(&pb.DestroyEvent{
-						Nid: uint64(*i.NetworkId()),
-					})
-				}
+				input.BroadcastAll(&pb.SpawnExplosion{
+					Pos:      i.Pos().ToProto(),
+					Momentum: i.Momentum().ToProto(),
+				})
 				i.Remove()
 			}
 		}
@@ -647,21 +675,13 @@ func (g *Game) Step(input *Input) {
 				}
 				diff := i.Pos().Sub(*other.Pos())
 				if diff.Length() < 0.5 {
-					ie := g.E.NewIter()
-					ie.Require(NetworkTransmitKey)
-					ie.Require(TimedDestroyKey)
-					spawnExplosion(ie)
-					*ie.Pos() = *i.Pos()
-					*ie.Momentum() = *i.Momentum()
-					*ie.NetworkId() = g.NextNetworkId
-					*ie.TimedDestroy() = 0.5
-					g.NextNetworkId++
-
-					input.BroadcastOthers(&pb.SpawnEvent{
-						Nid:       uint64(*ie.NetworkId()),
-						SpawnType: pb.SpawnEvent_EXPLOSION,
+					input.BroadcastOthers(&pb.DestroyEvent{
+						Nid: *i.NetworkId(),
 					})
-
+					input.BroadcastAll(&pb.SpawnExplosion{
+						Pos:      i.Pos().ToProto(),
+						Momentum: i.Momentum().ToProto(),
+					})
 					i.Remove()
 					break
 				}
@@ -742,27 +762,6 @@ func (g *Game) Step(input *Input) {
 
 				i.ShipControl().FireCoolDown = 0.5
 				// i.ShipControl().FireCoolDown = 5
-
-				// im := g.E.NewIter()
-				// im.Require(NetworkTransmitKey)
-				// im.Require(TimedExplodeKey)
-				// spawnMissile(im)
-				// im.MissileDetails().Owner = i.Lookup()
-				// *im.TimedExplode() = 2
-				// *im.Pos() = *i.Pos()
-				// *im.Rot() = *i.Rot()
-				// *im.Spin() = *i.Spin()
-				// const MissileSpeed = 10
-				// *im.Momentum() = *i.Momentum()
-				// im.Momentum().AddEqual(Vec2FromRadians(*i.Rot()).Scale(MissileSpeed))
-
-				// *im.NetworkId() = g.NextNetworkId
-				// g.NextNetworkId++
-
-				// input.BroadcastOthers(&pb.SpawnEvent{
-				// 	Nid:       uint64(*im.NetworkId()),
-				// 	SpawnType: pb.SpawnEvent_MISSILE,
-				// })
 			}
 		}
 	}
@@ -964,47 +963,31 @@ func (g *Game) Step(input *Input) {
 	}
 }
 
-func spawnSpaceship(i *Iter) {
-	i.Require(PosKey)
-	i.Require(RotKey)
-	i.Require(SpriteKey)
-	i.Require(KeepInCameraKey)
-	i.Require(SpinKey)
-	i.Require(MomentumKey)
-	i.Require(ShipControlKey)
-	i.Require(LookupKey)
-	i.Require(AffectedByGravityKey)
-	i.Require(NetworkIdKey)
-	i.Require(BoundLocationKey)
-	i.Require(CanExplodeKey)
-	i.New()
-
-	*i.Sprite() = SpriteShip
-}
-
-// func spawnMissile(i *Iter) {
+// func spawnSpaceship(i *Iter) {
 // 	i.Require(PosKey)
 // 	i.Require(RotKey)
+// 	i.Require(SpriteKey)
+// 	i.Require(KeepInCameraKey)
 // 	i.Require(SpinKey)
 // 	i.Require(MomentumKey)
-// 	i.Require(SpriteKey)
+// 	i.Require(ShipControlKey)
+// 	i.Require(LookupKey)
 // 	i.Require(AffectedByGravityKey)
 // 	i.Require(NetworkIdKey)
-// 	i.Require(MissileDetailsKey)
+// 	i.Require(BoundLocationKey)
 // 	i.Require(CanExplodeKey)
-// 	i.Require(LookupKey)
 // 	i.New()
 
-// 	*i.Sprite() = SpriteMissile
+// 	*i.Sprite() = SpriteShip
 // }
 
-func spawnExplosion(i *Iter) {
-	i.Require(PosKey)
-	i.Require(MomentumKey)
-	i.Require(ExplosionDetailsKey)
-	i.Require(NetworkIdKey)
-	i.New()
-	// REMOVE TO TRIGGER WASM BUG, IS ERRONOUSLY TRUE
-	i.ExplosionDetails().Initialized = false
-	// log.Println("Is initialized", i.ExplosionDetails().Initialized)
-}
+// func spawnExplosion(i *Iter) {
+// 	i.Require(PosKey)
+// 	i.Require(MomentumKey)
+// 	i.Require(ExplosionDetailsKey)
+// 	i.Require(NetworkIdKey)
+// 	i.New()
+// 	// REMOVE TO TRIGGER WASM BUG, IS ERRONOUSLY TRUE
+// 	i.ExplosionDetails().Initialized = false
+// 	// log.Println("Is initialized", i.ExplosionDetails().Initialized)
+// }

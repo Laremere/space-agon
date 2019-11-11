@@ -41,11 +41,14 @@ message Memo {
     ShipControlTrack ship_control_track = 14;
  
     // TODO: Remove
-    SpawnEvent spawn_event = 15;
+  //  SpawnEvent spawn_event = 15;
     DestroyEvent destroy_event = 16;
 
     ShootMissile shoot_missile = 17;
     SpawnMissile spawn_missile = 18;
+    SpawnExplosion spawn_explosion = 19;
+    SpawnShip spawn_ship = 20;
+    RegisterPlayer register_player = 21;
   }
 }
 
@@ -78,18 +81,18 @@ message ShipControlTrack {
   bool right = 4;
 }
 
-message SpawnEvent {
-  uint64 nid = 1;
-
-  enum SpawnType {
-    UNKNOWN = 0;
-    SHIP = 1;
-    //MISSILE = 2;
-    EXPLOSION = 3;
-  }
-
-  SpawnEvent.SpawnType spawn_type = 2;
-}
+//message SpawnEvent {
+//  uint64 nid = 1;
+//
+//  enum SpawnType {
+//    UNKNOWN = 0;
+//    SHIP = 1;
+//    //MISSILE = 2;
+//    //EXPLOSION = 3;
+//  }
+//
+//  SpawnEvent.SpawnType spawn_type = 2;
+//}
 
 message DestroyEvent {
   uint64 nid = 1;
@@ -107,6 +110,24 @@ message SpawnMissile {
   vec2 momentum = 3;
   float rot = 4;
   float spin = 5;
+}
+
+message SpawnExplosion {
+  vec2 pos = 1;
+  vec2 momentum = 2;
+}
+
+message SpawnShip {
+  uint64 nid = 1;
+  int64 authority = 2;
+  vec2 pos = 3;
+  vec2 momentum = 4;
+  float rot = 5;
+  float spin = 6;
+}
+
+message RegisterPlayer {
+  int64 cid = 1;
 }
 
 message vec2 {

@@ -185,8 +185,14 @@ func newMemoRouter() *memoRouter {
 			for _, memo := range memos {
 
 				switch a := memo.Actual.(type) {
-				case *pb.Memo_SpawnEvent:
-					actual := a.SpawnEvent
+				// case *pb.Memo_SpawnEvent:
+				// 	actual := a.SpawnEvent
+				// 	mr.createMemos[actual.Nid] = memo
+				case *pb.Memo_SpawnMissile:
+					actual := a.SpawnMissile
+					mr.createMemos[actual.Nid] = memo
+				case *pb.Memo_SpawnShip:
+					actual := a.SpawnShip
 					mr.createMemos[actual.Nid] = memo
 				case *pb.Memo_DestroyEvent:
 					actual := a.DestroyEvent
