@@ -768,6 +768,51 @@ func (g *Game) Step(input *Input) {
 		}
 	}
 
+	if input.IsRendered { // Spawn ship movement particles
+		i := g.E.NewIter()
+		i.Require(PosKey)
+		i.Require(RotKey)
+		i.Require(ShipControlKey)
+		i.Require(MomentumKey)
+
+		ip := g.E.NewIter()
+		ip.Require(PosKey)
+		ip.Require(PointRenderKey)
+		ip.Require(MomentumKey)
+		ip.Require(TimedDestroyKey)
+		ip.Require(ParticleSunDeleteKey)
+
+		for i.Next() {
+			const pushFactor = 5
+			emitPoint := i.Pos().Sub(Vec2FromRadians(*i.Rot()).Scale(0.4))
+
+			if i.ShipControl().Up {
+				ip.New()
+				*ip.Pos() = emitPoint
+
+				angleOut := *i.Rot() + math.Pi + (rand.Float32()-0.5)/3
+				*ip.Momentum() = i.Momentum().Add(Vec2FromRadians(angleOut).Scale(pushFactor))
+				*ip.TimedDestroy() = rand.Float32()*2 + 1
+			}
+			if i.ShipControl().Left {
+				ip.New()
+				*ip.Pos() = emitPoint
+
+				angleOut := *i.Rot() + math.Pi/2 + (rand.Float32()-0.5)/3
+				*ip.Momentum() = i.Momentum().Add(Vec2FromRadians(angleOut).Scale(pushFactor))
+				*ip.TimedDestroy() = rand.Float32()*2 + 1
+			}
+			if i.ShipControl().Right {
+				ip.New()
+				*ip.Pos() = emitPoint
+
+				angleOut := *i.Rot() + math.Pi*3/2 + (rand.Float32()-0.5)/3
+				*ip.Momentum() = i.Momentum().Add(Vec2FromRadians(angleOut).Scale(pushFactor))
+				*ip.TimedDestroy() = rand.Float32()*2 + 1
+			}
+		}
+	}
+
 	{
 		i := g.E.NewIter()
 		i.Require(RotKey)

@@ -255,6 +255,7 @@ func (c *client) frame() {
 		c.inp.Dt = maximumStep
 		c.g.Step(c.inp)
 		c.inp.Dt = actualDt - maximumStep
+		c.inp.Memos = nil
 	}
 	c.g.Step(c.inp)
 
