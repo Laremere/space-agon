@@ -30,6 +30,7 @@ type Sprite uint16
 const (
 	SpriteUnset = Sprite(iota)
 	SpriteShip
+	SpriteEnemyShip
 	SpriteMissile
 	SpriteStar
 	SpriteStarBit

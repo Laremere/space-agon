@@ -216,6 +216,10 @@ var spritemap = map[game.Sprite]*Sprite{
 		textureCoords: genTexCoords(0, 0, 512, 512),
 		size:          1,
 	},
+	game.SpriteEnemyShip: &Sprite{
+		textureCoords: genTexCoords(512, 512, 1024, 1024),
+		size:          1,
+	},
 	game.SpriteStar: &Sprite{
 		textureCoords: genTexCoords(0, 512, 512, 1024),
 		size:          10,

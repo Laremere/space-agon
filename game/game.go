@@ -407,7 +407,6 @@ func (g *Game) Step(input *Input) {
 			i.Require(CanExplodeKey)
 			i.New()
 
-			*i.Sprite() = SpriteShip
 			*i.Pos() = Vec2FromProto(spawnShip.Pos)
 			*i.Momentum() = Vec2FromProto(spawnShip.Momentum)
 			*i.Rot() = spawnShip.Rot
@@ -425,6 +424,9 @@ func (g *Game) Step(input *Input) {
 
 			if spawnShip.Authority == input.Cid {
 				g.ControlledShip = i.Lookup()
+				*i.Sprite() = SpriteShip
+			} else {
+				*i.Sprite() = SpriteEnemyShip
 			}
 
 		case *pb.Memo_RegisterPlayer:
