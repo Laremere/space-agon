@@ -20,7 +20,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/googleforgames/space-agon/game/protostream"
+	"github.com/laremere/space-agon/game/protostream"
 	"golang.org/x/net/websocket"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
@@ -47,6 +47,8 @@ func main() {
 }
 
 func matchmake(ws *websocket.Conn) {
+	ws.PayloadType = 2 // Sets sent payloads to binary
+
 	ctx := ws.Request().Context()
 	wsstream := protostream.NewProtoStream(ws)
 

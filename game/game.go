@@ -20,7 +20,7 @@ import (
 	"math/rand"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/googleforgames/space-agon/game/pb"
+	"github.com/laremere/space-agon/game/pb"
 )
 
 type Game struct {

@@ -15,14 +15,14 @@
 FROM golang:1.13.0 as builder
 ENV GO111MODULE=on
 
-WORKDIR /go/src/github.com/googleforgames/space-agon
+WORKDIR /go/src/github.com/laremere/space-agon
 
 COPY go.sum go.mod ./
 RUN go mod download
 
 COPY . .
 RUN mkdir /app
-RUN CGO_ENABLED=0 go build -installsuffix cgo -o /app/mmf github.com/googleforgames/space-agon/mmf
+RUN CGO_ENABLED=0 go build -installsuffix cgo -o /app/mmf github.com/laremere/space-agon/mmf
 
 FROM gcr.io/distroless/static:nonroot
 COPY --from=builder --chown=nonroot "/app" "/app"

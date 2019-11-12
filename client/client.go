@@ -23,9 +23,9 @@ import (
 	"sync"
 	"syscall/js"
 
-	"github.com/googleforgames/space-agon/game"
-	"github.com/googleforgames/space-agon/game/pb"
-	"github.com/googleforgames/space-agon/game/protostream"
+	"github.com/laremere/space-agon/game"
+	"github.com/laremere/space-agon/game/pb"
+	"github.com/laremere/space-agon/game/protostream"
 	"google.golang.org/grpc/status"
 	ompb "open-match.dev/open-match/pkg/pb"
 )
