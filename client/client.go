@@ -111,11 +111,27 @@ func newClient() (*client, error) {
 		return nil
 	}))
 
+	js.Global().Get("window").Call("addEventListener", "resize", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		log.Println("Resizing")
+		go func() {
+			c.grLock.Lock()
+			defer c.grLock.Unlock()
+			var err error
+			c.gr, err = NewGraphics()
+			if err != nil {
+				// TODO: Display properly.
+				panic(err)
+			}
+		}()
+		return nil
+	}), false)
+
 	return c, nil
 }
 
 type client struct {
 	gr            *graphics
+	grLock        sync.Mutex
 	g             *game.Game
 	inp           *game.Input
 	lastTimestamp float64
@@ -258,6 +274,9 @@ func (c *client) frame() {
 		c.inp.Memos = nil
 	}
 	c.g.Step(c.inp)
+
+	c.grLock.Lock()
+	defer c.grLock.Unlock()
 
 	c.gr.Clear()
 	{

@@ -16,9 +16,17 @@
         go.run(result.instance);
       });
     </script>
+    <style>
+      html, body, #container {
+        width:  100%;
+        height: 100%;
+        margin: 0;
+      }
+    </style>
   </head>
   <body>
     <image id="spritesheet" hidden src="/static/spritesheet.svg"></image>
-    <canvas id="game" width="1000" height="700"></canvas>
+    <div id="container">
+    </div>
   </body>
 </html>

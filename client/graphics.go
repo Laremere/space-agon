@@ -53,7 +53,19 @@ type graphics struct {
 func NewGraphics() (*graphics, error) {
 	g := &graphics{}
 
+	// document.getElementById("game").parentElement.removeChild(document.getElementById("game"));
+
 	canvas := js.Global().Get("document").Call("getElementById", "game")
+	if canvas.Type() != js.TypeNull {
+		canvas.Get("parentElement").Call("removeChild", canvas)
+	}
+	canvas = js.Global().Get("document").Call("createElement", "canvas")
+	g.width = js.Global().Get("window").Get("innerWidth").Int()
+	g.height = js.Global().Get("window").Get("innerHeight").Int()
+	canvas.Set("width", g.width)
+	canvas.Set("height", g.height)
+	canvas.Set("id", "game")
+	js.Global().Get("document").Call("getElementById", "container").Call("appendChild", canvas)
 
 	var err error
 	g.w, err = webgl.InitWebgl(canvas)
@@ -65,12 +77,9 @@ func NewGraphics() (*graphics, error) {
 	g.w.BlendFunc(g.w.SRC_ALPHA, g.w.ONE_MINUS_SRC_ALPHA)
 
 	spritesheetElement := js.Global().Get("document").Call("getElementById", "spritesheet")
-	log.Println("WIDTH", spritesheetElement.Get("width"))
-	log.Println("HEIGHT", spritesheetElement.Get("height"))
+	// log.Println("WIDTH", spritesheetElement.Get("width"))
+	// log.Println("HEIGHT", spritesheetElement.Get("height"))
 	g.spritesheet = webgl.LoadTexture(g.w, spritesheetElement)
-
-	g.width = canvas.Get("width").Int()
-	g.height = canvas.Get("height").Int()
 
 	g.spriteShader, err = webgl.CreateProgram(
 		g.w,
