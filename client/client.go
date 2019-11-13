@@ -38,6 +38,8 @@ func main() {
 		} else {
 			js.Global().Get("document").Get("body").Set("innerHTML", js.ValueOf(err.Error()))
 		}
+		setOverlay("overlay-main-menu")
+		// setOverlay("overlay-choose-ip")
 		return nil
 	}))
 
@@ -111,6 +113,11 @@ func newClient() (*client, error) {
 		return nil
 	}))
 
+	js.Global().Set("setOverlay", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		setOverlay(args[0].String())
+		return nil
+	}))
+
 	js.Global().Get("window").Call("addEventListener", "resize", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		log.Println("Resizing")
 		go func() {
@@ -158,6 +165,7 @@ func (c *client) connect(addr string) {
 			c.lock.Lock()
 			defer c.lock.Unlock()
 
+			setOverlay("")
 			c.inp.IsConnected = true
 			c.inp.Cid = clientInitialize.Cid
 			c.g = game.NewGame()
@@ -195,6 +203,7 @@ func (c *client) connect(addr string) {
 }
 
 func (c *client) matchmake() {
+	setOverlay("overlay-matchmaking")
 	addr := js.Global().Get("window").Get("location").Get("host").String()
 
 	wws, err := NewWrappedWebSocket("ws://" + addr + "/matchmake/")
@@ -208,7 +217,9 @@ func (c *client) matchmake() {
 			a := &ompb.Assignment{}
 			err := stream.Recv(a)
 			if err != nil {
+				// TODO: Display error
 				log.Println("Error receiving assignment:", err)
+				return
 			}
 
 			if a.Error != nil {
@@ -346,6 +357,42 @@ func (c *client) frame() {
 	c.inp.FrameEndReset()
 
 	c.scheduleFrame()
+}
+
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+
+var overlays = map[string]js.Value{
+	"overlay-main-menu":   js.Null(),
+	"overlay-loading":     js.Null(),
+	"overlay-choose-ip":   js.Null(),
+	"overlay-matchmaking": js.Null(),
+	"overlay-connecting":  js.Null(),
+}
+
+func init() {
+	document := js.Global().Get("document")
+	for id := range overlays {
+		overlays[id] = document.Call("getElementById", id).Get("style")
+	}
+}
+
+func setOverlay(id string) {
+	found := false
+
+	for otherId, style := range overlays {
+		if otherId == id {
+			found = true
+			style.Set("display", "block")
+		} else {
+			style.Set("display", "none")
+		}
+	}
+
+	if !found && id != "" {
+		panic("Could not find overlay with id " + id)
+	}
 }
 
 //////////////////////////////////////////////////////
