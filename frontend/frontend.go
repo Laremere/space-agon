@@ -16,7 +16,7 @@ package main
 
 import (
 	"context"
-	"io"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -48,13 +48,38 @@ func main() {
 
 func matchmake(ws *websocket.Conn) {
 	ws.PayloadType = 2 // Sets sent payloads to binary
+	stream := protostream.NewProtoStream(ws)
 
-	ctx := ws.Request().Context()
-	wsstream := protostream.NewProtoStream(ws)
+	ctx, cancel := context.WithCancel(ws.Request().Context())
+	assignments := make(chan *pb.Assignment)
+	errs := make(chan error)
 
+	go streamAssignments(ctx, assignments, errs)
+
+	for {
+		select {
+		case err := <-errs:
+			log.Println("Error getting assgnment:", err)
+			err = stream.Send(&pb.Assignment{Error: status.Convert(err).Proto()})
+			if err != nil {
+				log.Println("Error sending error:", err)
+			}
+			return
+		case assigment := <-assignments:
+			err := stream.Send(assigment)
+			if err != nil {
+				log.Println("Error sending updated assignment:", err)
+				cancel()
+				return
+			}
+		}
+	}
+}
+
+func streamAssignments(ctx context.Context, assignments chan *pb.Assignment, errs chan error) {
 	conn, err := grpc.Dial("om-frontend.open-match.svc.cluster.local:50504", grpc.WithInsecure())
 	if err != nil {
-		panic(err)
+		errs <- fmt.Errorf("Error dialing open match: %w", err)
 	}
 	defer conn.Close()
 	fe := pb.NewFrontendClient(conn)
@@ -67,7 +92,8 @@ func matchmake(ws *websocket.Conn) {
 
 		resp, err := fe.CreateTicket(ctx, req)
 		if err != nil {
-			panic(err)
+			errs <- fmt.Errorf("Error creating open match ticket: %w", err)
+			return
 		}
 		ticketId = resp.Ticket.Id
 	}
@@ -86,32 +112,16 @@ func matchmake(ws *websocket.Conn) {
 
 		stream, err := fe.GetAssignments(ctx, req)
 		if err != nil {
-			log.Println("Error streaming assignment:", err)
-			err = wsstream.Send(&pb.Assignment{Error: status.Convert(err).Proto()})
-			if err != nil {
-				log.Println("Error sending error:", err)
-			}
+			errs <- fmt.Errorf("Error getting assignment stream: %w", err)
 			return
 		}
 		for {
 			resp, err := stream.Recv()
-			if err == io.EOF {
-				return
-			}
 			if err != nil {
-				log.Println("Error streaming assignment:", err)
-				err = wsstream.Send(&pb.Assignment{Error: status.Convert(err).Proto()})
-				if err != nil {
-					log.Println("Error sending error:", err)
-				}
+				errs <- fmt.Errorf("Error streaming assignment: %w", err)
 				return
 			}
-
-			err = wsstream.Send(resp.Assignment)
-			if err != nil {
-				log.Println("Error sending updated assignment:", err)
-				return
-			}
+			assignments <- resp.Assignment
 		}
 	}
 }

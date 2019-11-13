@@ -100,3 +100,19 @@ input[type=text] {
   background-color: #0a1a3f;
   padding: 0.1em;
 }
+
+#error-text {
+  font-size: 3vmin;
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  top: 5%;
+  bottom: 5%;
+  border: 0.5em solid #2d70de;
+  background-color: #0a1a3f;
+  color: white;
+  padding: 0.1em;
+  text-align: left;
+  user-select: text;
+  cursor: initial;
+}

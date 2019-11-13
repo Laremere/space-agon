@@ -18,6 +18,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -32,21 +33,15 @@ import (
 
 func main() {
 	js.Global().Call("whenLoaded", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		c, err := newClient()
-		if err == nil {
-			c.scheduleFrame()
-		} else {
-			js.Global().Get("document").Get("body").Set("innerHTML", js.ValueOf(err.Error()))
-		}
+		newClient().scheduleFrame()
 		setOverlay("overlay-main-menu")
-		// setOverlay("overlay-choose-ip")
 		return nil
 	}))
 
 	<-make(chan struct{})
 }
 
-func newClient() (*client, error) {
+func newClient() *client {
 	inp := game.NewInput()
 	inp.IsRendered = true
 	inp.IsPlayer = true
@@ -86,7 +81,7 @@ func newClient() (*client, error) {
 	log.Println("Initiating Graphics.")
 	gr, err := NewGraphics()
 	if err != nil {
-		return nil, err
+		fatalError(err)
 	}
 
 	c := &client{
@@ -126,14 +121,13 @@ func newClient() (*client, error) {
 			var err error
 			c.gr, err = NewGraphics()
 			if err != nil {
-				// TODO: Display properly.
-				panic(err)
+				fatalError(err)
 			}
 		}()
 		return nil
 	}), false)
 
-	return c, nil
+	return c
 }
 
 type client struct {
@@ -144,13 +138,13 @@ type client struct {
 	lastTimestamp float64
 	lock          sync.Mutex
 	sending       chan []*pb.Memo
-	recieving     chan []*pb.Memo
+	receiving     chan []*pb.Memo
 }
 
 func (c *client) connect(addr string) {
 	wws, err := NewWrappedWebSocket("ws://" + addr + "/connect/")
 	if err != nil {
-		log.Fatal(err)
+		fatalError(err)
 	}
 	stream := protostream.NewProtoStream(wws)
 
@@ -159,7 +153,7 @@ func (c *client) connect(addr string) {
 			clientInitialize := &pb.ClientInitialize{}
 			err := stream.Recv(clientInitialize)
 			if err != nil {
-				log.Println("Failed to initialize client:", err)
+				fatalError(fmt.Errorf("Failed to initialize client: %w", err))
 			}
 
 			c.lock.Lock()
@@ -174,7 +168,7 @@ func (c *client) connect(addr string) {
 				close(c.sending)
 			}
 			c.sending = make(chan []*pb.Memo, 1)
-			c.recieving = make(chan []*pb.Memo, 1)
+			c.receiving = make(chan []*pb.Memo, 1)
 
 		}
 		go func() {
@@ -183,7 +177,7 @@ func (c *client) connect(addr string) {
 				toSend := <-c.sending
 				err = stream.Send(&pb.Memos{Memos: toSend})
 			}
-			log.Println("Error sending memos:", err)
+			fatalError(fmt.Errorf("Error sending memos (disconnected from server?): %w", err))
 			for range c.sending {
 			}
 		}()
@@ -193,10 +187,9 @@ func (c *client) connect(addr string) {
 				memos := &pb.Memos{}
 				err := stream.Recv(memos)
 				if err != nil {
-					log.Println("Error recieving from stream: ", err.Error())
-					return
+					fatalError(fmt.Errorf("Error receiving from stream (disconnected from server?): %w", err))
 				}
-				combineToSend(c.recieving, memos.Memos)
+				combineToSend(c.receiving, memos.Memos)
 			}
 		}()
 	}()
@@ -208,7 +201,7 @@ func (c *client) matchmake() {
 
 	wws, err := NewWrappedWebSocket("ws://" + addr + "/matchmake/")
 	if err != nil {
-		log.Fatal(err)
+		fatalError(fmt.Errorf("Failed to connect to addr: %s, with error: %w", addr, err))
 	}
 	stream := protostream.NewProtoStream(wws)
 	go func() {
@@ -217,17 +210,13 @@ func (c *client) matchmake() {
 			a := &ompb.Assignment{}
 			err := stream.Recv(a)
 			if err != nil {
-				// TODO: Display error
-				log.Println("Error receiving assignment:", err)
-				return
+				fatalError(fmt.Errorf("Error receiving assignment: %w", err))
 			}
 
 			if a.Error != nil {
 				err := status.FromProto(a.Error).Err()
 				if err != nil {
-					// TODO: Display error
-					log.Println("Error on assignment:", err)
-					return
+					fatalError(fmt.Errorf("Error on assignment: %w", err))
 				}
 			}
 
@@ -248,7 +237,7 @@ func (c *client) scheduleFrame() {
 		c.lastTimestamp = now
 
 		select {
-		case c.inp.Memos = <-c.recieving:
+		case c.inp.Memos = <-c.receiving:
 		default:
 			c.inp.Memos = nil
 		}
@@ -261,7 +250,7 @@ func (c *client) scheduleFrame() {
 		// 	if isMemoRecipient(c.inp.Cid, memo) {
 		// 		selfSend = append(selfSend, memo)
 		// 	}
-		// 	combineToSend(c.recieving, selfSend)
+		// 	combineToSend(c.receiving, selfSend)
 		// }
 
 		if c.sending != nil {
@@ -369,6 +358,7 @@ var overlays = map[string]js.Value{
 	"overlay-choose-ip":   js.Null(),
 	"overlay-matchmaking": js.Null(),
 	"overlay-connecting":  js.Null(),
+	"overlay-error":       js.Null(),
 }
 
 func init() {
@@ -393,6 +383,13 @@ func setOverlay(id string) {
 	if !found && id != "" {
 		panic("Could not find overlay with id " + id)
 	}
+}
+
+func fatalError(err error) {
+	setOverlay("overlay-error")
+	err = fmt.Errorf("An error has occured, refresh to continue:\n %w", err)
+	js.Global().Get("document").Call("getElementById", "error-text").Set("innerText", err.Error())
+	log.Fatal("A fatal error has occured:", err)
 }
 
 //////////////////////////////////////////////////////
@@ -427,7 +424,10 @@ func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
 		return nil
 	}))
 
+	incomingMessage := sync.WaitGroup{}
+
 	blobCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		defer incomingMessage.Done()
 		data := js.Global().Get("Uint8Array").New(args[0])
 		length := data.Length()
 		b := make([]byte, length)
@@ -442,6 +442,7 @@ func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
 	})
 
 	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		incomingMessage.Add(1)
 		data := args[0].Get("data")
 		data.Call("arrayBuffer").Call("then", blobCallback)
 
@@ -461,7 +462,10 @@ func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
 
 	ws.Set("onclose", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		log.Println("Websocket closed: ", addr)
-		wws.Close()
+		go func() {
+			incomingMessage.Wait()
+			wws.Close()
+		}()
 		return nil
 	}))
 
