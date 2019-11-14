@@ -379,7 +379,7 @@ func (g *Game) Step(input *Input) {
 					}
 
 					i.New()
-					*i.Pos() = pos
+					*i.Pos() = pos.Add(Vec2FromRadians(rand.Float32() * math.Pi * 2).Scale(rand.Float32() * ExplosionRadius))
 					*i.Momentum() = momentum.Add(Vec2FromRadians(dir).Scale(speed))
 					*i.TimedDestroy() = ttl
 				}
