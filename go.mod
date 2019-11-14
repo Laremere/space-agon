@@ -19,9 +19,9 @@ go 1.13
 require (
 	agones.dev/agones v1.1.0
 	github.com/golang/protobuf v1.3.2
-	golang.org/x/net v0.0.0-20190926025831-c00fd9afed17
-	google.golang.org/grpc v1.21.1
+	golang.org/x/net v0.0.0-20191105084925-a882066a44e0
+	google.golang.org/grpc v1.25.0
 	k8s.io/apimachinery v0.0.0-20190221084156-01f179d85dbc
 	k8s.io/client-go v9.0.0+incompatible
-	open-match.dev/open-match v0.8.0-rc.1
+	open-match.dev/open-match v0.4.1-0.20191113214301-7a1dcbdf9324
 )

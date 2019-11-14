@@ -84,7 +84,8 @@ func InitWebgl(canvas js.Value) (*WebGL, error) {
 	w.canvas = canvas
 	w.gl = canvas.Call("getContext", "webgl")
 
-	if w.gl == js.Null() {
+	// Post 1.14, this can be replaced with w.gl.IsNull()
+	if w.gl.Type() == js.TypeNull {
 		return nil, errors.New("Creating a webgl context is not supported.  This won't work.")
 	}
 
