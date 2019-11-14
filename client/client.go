@@ -139,6 +139,14 @@ type client struct {
 	lock          sync.Mutex
 	sending       chan []*pb.Memo
 	receiving     chan []*pb.Memo
+	tutorial      tutorial
+}
+
+type tutorial struct {
+	timeAlive    float32
+	timeTurning  float32
+	timeMoving   float32
+	timeShooting float32
 }
 
 func (c *client) connect(addr string) {
@@ -345,6 +353,28 @@ func (c *client) frame() {
 
 	c.inp.FrameEndReset()
 
+	if c.g.ControlledShip.Alive() {
+		c.tutorial.timeAlive += c.inp.Dt
+		if c.inp.Left.Hold || c.inp.Right.Hold {
+			c.tutorial.timeTurning += c.inp.Dt
+		}
+		if c.inp.Up.Hold {
+			c.tutorial.timeMoving += c.inp.Dt
+		}
+		if c.inp.Fire.Hold {
+			c.tutorial.timeShooting += c.inp.Dt
+		}
+		if c.tutorial.timeAlive > 7 && c.tutorial.timeTurning < 3.5 {
+			setOverlay("overlay-tutorial-turn")
+		} else if c.tutorial.timeAlive > 10 && c.tutorial.timeMoving < 5 {
+			setOverlay("overlay-tutorial-move")
+		} else if c.tutorial.timeAlive > 15 && c.tutorial.timeShooting < 3 {
+			setOverlay("overlay-tutorial-shoot")
+		} else {
+			setOverlay("")
+		}
+	}
+
 	c.scheduleFrame()
 }
 
@@ -353,12 +383,15 @@ func (c *client) frame() {
 //////////////////////////////////////////////////////
 
 var overlays = map[string]js.Value{
-	"overlay-main-menu":   js.Null(),
-	"overlay-loading":     js.Null(),
-	"overlay-choose-ip":   js.Null(),
-	"overlay-matchmaking": js.Null(),
-	"overlay-connecting":  js.Null(),
-	"overlay-error":       js.Null(),
+	"overlay-main-menu":      js.Null(),
+	"overlay-loading":        js.Null(),
+	"overlay-choose-ip":      js.Null(),
+	"overlay-matchmaking":    js.Null(),
+	"overlay-connecting":     js.Null(),
+	"overlay-error":          js.Null(),
+	"overlay-tutorial-turn":  js.Null(),
+	"overlay-tutorial-move":  js.Null(),
+	"overlay-tutorial-shoot": js.Null(),
 }
 
 func init() {
@@ -368,7 +401,13 @@ func init() {
 	}
 }
 
+var currentOverlay string
+
 func setOverlay(id string) {
+	if id == currentOverlay {
+		return
+	}
+	currentOverlay = id
 	found := false
 
 	for otherId, style := range overlays {
