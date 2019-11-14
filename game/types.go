@@ -35,6 +35,7 @@ const (
 	SpriteMissile
 	SpriteStar
 	SpriteStarBit
+	SpriteExplosionFlash
 )
 
 type Vec2 [2]float32

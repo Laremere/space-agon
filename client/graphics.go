@@ -233,6 +233,12 @@ var spritemap = map[game.Sprite]*Sprite{
 		textureCoords: genTexCoords(0, 512, 512, 1024),
 		size:          10,
 	},
+	game.SpriteExplosionFlash: &Sprite{
+		textureCoords: genTexCoords(0, 512, 512, 1024),
+		// *2 because radius not diameter, *2 because the circle only takes up half
+		// the sprite texture size.  Except that seems to big??
+		size: game.ExplosionRadius * 2, // * 2 * 2,
+	},
 	game.SpriteMissile: &Sprite{
 		textureCoords: genTexCoords(512, 0, 1024, 512),
 		size:          1,

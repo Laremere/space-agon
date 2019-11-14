@@ -175,6 +175,8 @@ func (inp *Input) FrameEndReset() {
 	inp.Fire.FrameEndReset()
 }
 
+const ExplosionRadius = 2
+
 func (g *Game) Step(input *Input) {
 	if g.ControlledShip.Alive() {
 		i := g.E.NewIter()
@@ -277,7 +279,7 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 			if getNid(g, i, shootMissile.Owner) {
 
-				const MissileSpeed = 10
+				const MissileSpeed = 13
 				momentum := *i.Momentum()
 				momentum.AddEqual(Vec2FromRadians(*i.Rot()).Scale(MissileSpeed))
 
@@ -343,7 +345,7 @@ func (g *Game) Step(input *Input) {
 
 				for i.Next() {
 					diff := pos.Sub(*i.Pos())
-					if diff.Length() < 1 {
+					if diff.Length() < ExplosionRadius {
 						iMomentum := Vec2{}
 						if i.Momentum() != nil {
 							iMomentum = *i.Momentum()
@@ -381,6 +383,20 @@ func (g *Game) Step(input *Input) {
 					*i.Momentum() = momentum.Add(Vec2FromRadians(dir).Scale(speed))
 					*i.TimedDestroy() = ttl
 				}
+			}
+
+			if input.IsRendered {
+				i := g.E.NewIter()
+				i.Require(PosKey)
+				i.Require(MomentumKey)
+				i.Require(TimedDestroyKey)
+				i.Require(SpriteKey)
+
+				i.New()
+				*i.Pos() = pos
+				*i.Momentum() = momentum
+				*i.TimedDestroy() = 0.07
+				*i.Sprite() = SpriteExplosionFlash
 			}
 
 		case *pb.Memo_SpawnShip:
@@ -435,8 +451,8 @@ func (g *Game) Step(input *Input) {
 			input.BroadcastAll(&pb.SpawnShip{
 				Nid:       g.NextNid(),
 				Authority: registerPlayer.Cid,
-				Pos:       (&Vec2{7, 0}).ToProto(),
-				Momentum:  (&Vec2{0, 5}).ToProto(),
+				Pos:       (&Vec2{14, 0}).ToProto(),
+				Momentum:  (&Vec2{0, 3.5}).ToProto(),
 				Rot:       0,
 				Spin:      0,
 			})
@@ -676,7 +692,7 @@ func (g *Game) Step(input *Input) {
 					continue
 				}
 				diff := i.Pos().Sub(*other.Pos())
-				if diff.Length() < 0.5 {
+				if diff.Length() < ExplosionRadius*0.8 {
 					input.BroadcastOthers(&pb.DestroyEvent{
 						Nid: *i.NetworkId(),
 					})
@@ -717,7 +733,7 @@ func (g *Game) Step(input *Input) {
 			///////////////////////////
 			const rotationForSpeed = 5
 			const rotationAgainstSpeed = 10
-			const forwardSpeed = 2
+			const forwardSpeed = 4
 
 			spinDesire := float32(0)
 			if i.ShipControl().Left {
