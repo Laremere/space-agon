@@ -426,25 +426,26 @@ func NewWrappedWebSocket(addr string) (*WrappedWebSocket, error) {
 
 	incomingMessage := sync.WaitGroup{}
 
-	blobCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		defer incomingMessage.Done()
-		data := js.Global().Get("Uint8Array").New(args[0])
-		length := data.Length()
-		b := make([]byte, length)
-
-		js.CopyBytesToGo(b, data)
-
-		_, err := wws.w.Write(b)
-		if err != nil {
-			log.Println("Error in onmessage on ", addr, ":", err)
-		}
-		return nil
-	})
-
 	ws.Set("onmessage", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		incomingMessage.Add(1)
-		data := args[0].Get("data")
-		data.Call("arrayBuffer").Call("then", blobCallback)
+		blob := args[0].Get("data")
+		fr := js.Global().Get("FileReader").New()
+
+		fr.Set("onload", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			defer incomingMessage.Done()
+			data := js.Global().Get("Uint8Array").New(fr.Get("result"))
+			length := data.Length()
+			b := make([]byte, length)
+
+			js.CopyBytesToGo(b, data)
+
+			_, err := wws.w.Write(b)
+			if err != nil {
+				log.Println("Error in onmessage on ", addr, ":", err)
+			}
+			return nil
+		}))
+		fr.Call("readAsArrayBuffer", blob)
 
 		return nil
 	}))
