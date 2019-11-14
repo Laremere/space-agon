@@ -35,9 +35,9 @@ import (
 func main() {
 	log.Println("Initializing dedicated server")
 
-	waitForEmpty := startAgones()
+	playerConnected, playerDisconnected := startAgones()
 
-	http.Handle("/connect/", newDedicated(waitForEmpty))
+	http.Handle("/connect/", newDedicated(playerConnected, playerDisconnected))
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
@@ -54,15 +54,17 @@ type dedicated struct {
 
 	mr *memoRouter
 
-	waitForEmpty *sync.WaitGroup
+	playerConnected    func()
+	playerDisconnected func()
 }
 
-func newDedicated(waitForEmpty *sync.WaitGroup) websocket.Handler {
+func newDedicated(playerConnected func(), playerDisconnected func()) websocket.Handler {
 	d := &dedicated{
-		g:            game.NewGame(),
-		nextCid:      make(chan int64, 1),
-		mr:           newMemoRouter(),
-		waitForEmpty: waitForEmpty,
+		g:                  game.NewGame(),
+		nextCid:            make(chan int64, 1),
+		mr:                 newMemoRouter(),
+		playerConnected:    playerConnected,
+		playerDisconnected: playerDisconnected,
 	}
 	inp := game.NewInput()
 	inp.IsRendered = false
@@ -97,8 +99,8 @@ func newDedicated(waitForEmpty *sync.WaitGroup) websocket.Handler {
 func (d *dedicated) Handler(c *websocket.Conn) {
 	c.PayloadType = 2 // Sets sent payloads to binary
 
-	d.waitForEmpty.Add(1)
-	defer d.waitForEmpty.Done()
+	d.playerConnected()
+	defer d.playerDisconnected()
 
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -269,7 +271,7 @@ func isMemoRecipient(cid int64, memo *pb.Memo) bool {
 ///////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////
 
-func startAgones() *sync.WaitGroup {
+func startAgones() (playerConnected func(), playerDisconnected func()) {
 	waitForEmpty := &sync.WaitGroup{}
 
 	{
@@ -277,7 +279,7 @@ func startAgones() *sync.WaitGroup {
 		if ok {
 			if disabled == "true" {
 				log.Println("Agones disabled")
-				return waitForEmpty
+				return func() {}, func() {}
 			}
 			log.Fatal("Unknown DISABLE_AGONES value:", disabled)
 		}
@@ -297,17 +299,32 @@ func startAgones() *sync.WaitGroup {
 	}()
 
 	var shutdown sync.Once
+	var firstPlayerJoined sync.Once
+	waitForFirstPlayer := make(chan struct{})
 	a.WatchGameServer(func(gs *agonesSdk.GameServer) {
 		if gs.GetStatus().GetState() == "Allocated" {
 			shutdown.Do(func() {
 				log.Println("Detected the server is allocated.")
-				time.Sleep(time.Second * 15)
-				log.Println("Waiting for players to disconnect then shutting down.")
+				select {
+				case <-time.After(time.Minute * 15):
+					log.Println("Done waiting for first player to join.")
+				case <-waitForFirstPlayer:
+					log.Println("Detected first player joined")
+				}
+				log.Println("Waiting for all players to disconnect then shutting down.")
 				waitForEmpty.Wait()
+				log.Println("Server empty, shutting down.")
 				a.Shutdown()
 			})
 		}
 	})
 
-	return waitForEmpty
+	return func() {
+			waitForEmpty.Add(1)
+			firstPlayerJoined.Do(func() {
+				close(waitForFirstPlayer)
+			})
+		}, func() {
+			waitForEmpty.Done()
+		}
 }
