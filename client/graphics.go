@@ -112,7 +112,7 @@ func NewGraphics() (*graphics, error) {
 		return nil, fmt.Errorf("Error building spriteShader: %w", err)
 	}
 
-	g.coords = make([]float32, 3*2*2*1000)
+	g.coords = make([]float32, webgl.MaxArrayLength/(3*2*2))
 	g.textureCoords = make([]float32, len(g.coords))
 	g.written = 0
 

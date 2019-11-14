@@ -267,8 +267,8 @@ func (w *WebGL) Uniform2fv(u UniformLocation, v [2]float32) {
 	w.gl.Call("uniform2fv", js.Value(u), copyFloat32SliceToJS(v[:]))
 }
 
-func (w *WebGL) Uniform4fv(u UniformLocation, v [4]float64) {
-	w.gl.Call("uniform4fv", js.Value(u), copyFloat64SliceToJS(v[:]))
+func (w *WebGL) Uniform4fv(u UniformLocation, v [4]float32) {
+	w.gl.Call("uniform4fv", js.Value(u), copyFloat32SliceToJS(v[:]))
 }
 
 func (w *WebGL) EnableVertexAttribArray(a AttribLocation) {
@@ -333,19 +333,6 @@ func CompileShader(w *WebGL, code string, t ShaderType) (*Shader, error) {
 	return s, nil
 }
 
-// TODO: Javascript types arrays are backed by byte buffers.  It may be faster
-// to convert the golang slice into a byte buffer, and use js.CopyBytesToJS.
-// However there are possible endian issues.  I believe this method must be used
-// to properly trasmit 64 bit numbers, as the conversion to and from floats is
-// lossy.
-func copyFloat64SliceToJS(a []float64) js.Value {
-	r := js.Global().Get("Float64Array").New(len(a))
-	for i, v := range a {
-		r.SetIndex(i, js.ValueOf(v))
-	}
-	return r
-}
-
 func init() {
 	if copyFloat32SliceToJS([]float32{5}).Index(0).Float() == 5 {
 		return
@@ -359,14 +346,22 @@ func init() {
 
 var swapEndianess bool = false
 
+const MaxArrayLength = 3 * 2 * 2 * 1000
+
+const bytesPerFloatValue = 4
+
+var preallocatedBuffer = js.Global().Get("ArrayBuffer").New(MaxArrayLength * bytesPerFloatValue)
+
 func copyFloat32SliceToJS(a []float32) js.Value {
+	if len(a) > MaxArrayLength {
+		panic("Array too long to fit in pre-allocated buffer!")
+	}
+
 	// TODO: This is much faster, but could it be even better?  Would it be
 	// possible to not do any adding to a buffer on the Go side, but from js copy
 	// the float memory segment directly? (and then do any endian swapping.)
-	const bytesPerValue = 4
-	backingBuffer := js.Global().Get("ArrayBuffer").New(len(a) * bytesPerValue)
 	// TODO: Pool a large buffer, do in chunks if not large enough?
-	b := make([]byte, len(a)*bytesPerValue)
+	b := make([]byte, len(a)*bytesPerFloatValue)
 	bi := 0
 	for _, v := range a {
 		vb := math.Float32bits(v)
@@ -390,8 +385,8 @@ func copyFloat32SliceToJS(a []float32) js.Value {
 			bi++
 		}
 	}
-	js.CopyBytesToJS(js.Global().Get("Uint8Array").New(backingBuffer), b)
-	return js.Global().Get("Float32Array").New(backingBuffer)
+	js.CopyBytesToJS(js.Global().Get("Uint8Array").New(preallocatedBuffer), b)
+	return js.Global().Get("Float32Array").New(preallocatedBuffer, 0, len(a))
 }
 
 func copyInt16SliceToJS(a []int16) js.Value {
