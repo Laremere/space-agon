@@ -79,6 +79,14 @@ func (v *Vec2) Length() float32 {
 	return float32(math.Sqrt(float64(x*x + y*y)))
 }
 
+func (v Vec2) Normalize() Vec2 {
+	return v.Scale(1 / v.Length())
+}
+
+func (v Vec2) Dot(o Vec2) float32 {
+	return v[0]*o[0] + v[1]*o[1]
+}
+
 type Lookup [2]int
 
 func (l *Lookup) Alive() bool {

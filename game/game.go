@@ -883,13 +883,16 @@ func (g *Game) Step(input *Input) {
 		i := g.E.NewIter()
 		i.Require(BoundLocationKey)
 		i.Require(PosKey)
-		// i.Require(MomentumKey) // TODO: Change
+		i.Require(MomentumKey)
 
 		for i.Next() {
 			l := i.Pos().Length()
 			if l > 50 {
 				scale := 50 / l
 				*i.Pos() = i.Pos().Scale(scale)
+				// Calculate the momentum in the direction of the invisible wall, and
+				// cancel it out.
+				i.Momentum().AddEqual(i.Pos().Normalize().Scale((*i.Pos()).Normalize().Scale(-1).Dot(*i.Momentum())))
 			}
 		}
 	}
