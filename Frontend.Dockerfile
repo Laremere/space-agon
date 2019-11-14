@@ -25,7 +25,7 @@ ENV GO111MODULE=on
 # caused memory leaks. It's fixed in go's master, but won't be in the proper
 # release until go 1.14.  The fix is to build go from source (commit chosen to
 # be the latest as of writing) and then use that to build only the client. 
-# Unfortionate "workaround", but there was some good luck, the fix was only
+# Unfortunate "workaround", but there was some good luck, the fix was only
 # added the Monday of the week before writing this.
 
 WORKDIR /golatest
@@ -38,9 +38,6 @@ RUN git reset --hard FETCH_HEAD
 
 WORKDIR /golatest/src
 RUN CGO_ENABLED=0 ./make.bash
-
-#RUN /golatest/bin/go version
-#RUN exit 1
 
 WORKDIR /go/src/github.com/laremere/space-agon
 
