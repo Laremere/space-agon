@@ -105,35 +105,6 @@ spec:
 ---
 
 ###############################################
-# Open Match Configuration (note namespace)
-###############################################
-
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: om-configmap-override
-  namespace: open-match
-  labels:
-    app: open-match
-    component: config
-    release: open-match
-data:
-  matchmaker_config_override.yaml: |-
-    api:
-      evaluator:
-        hostname: "om-evaluator"
-        grpcport: "50508"
-        httpport: "51508"
-    synchronizer:
-      enabled: true
-      registrationIntervalMs: 250ms
-      proposalCollectionIntervalMs: 500ms
-    logging:
-      rpc: true
-
----
-
-###############################################
 # Director
 ###############################################
 
