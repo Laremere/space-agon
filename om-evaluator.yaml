@@ -113,7 +113,7 @@ spec:
           - name: om-config-volume-default
             mountPath: /app/config/default
           
-        image: "gcr.io/open-match-public-images/openmatch-evaluator-go-simple:0.8.0-rc.1"
+        image: "gcr.io/open-match-public-images/openmatch-evaluator-go-simple:0.8.0"
         ports:
         - name: grpc
           containerPort: 50508
@@ -140,3 +140,30 @@ spec:
           initialDelaySeconds: 10
           periodSeconds: 10
           failureThreshold: 2
+
+---
+
+# Usually this is considered seperate from the evaluator.  For simplicity,
+# keeping this in one file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: om-configmap-override
+  namespace: open-match
+  labels:
+    app: open-match
+    component: config
+    release: open-match
+data:
+  matchmaker_config_override.yaml: |-
+    api:
+      evaluator:
+        hostname: "om-evaluator"
+        grpcport: "50508"
+        httpport: "51508"
+    synchronizer:
+      enabled: true
+      registrationIntervalMs: 250ms
+      proposalCollectionIntervalMs: 500ms
+    logging:
+      rpc: true
