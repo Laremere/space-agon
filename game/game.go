@@ -79,7 +79,7 @@ func (k *Keystate) Up() {
 	}
 }
 
-func getNid(g *Game, i *Iter, nid uint64) bool {
+func GetNid(g *Game, i *Iter, nid uint64) bool {
 	lookup, ok := g.NetworkIds[nid]
 	if !ok || !lookup.Alive() {
 		return false
@@ -196,7 +196,7 @@ func (g *Game) Step(input *Input) {
 			destroyEvent := actual.DestroyEvent
 
 			i := g.E.NewIter()
-			if getNid(g, i, destroyEvent.Nid) {
+			if GetNid(g, i, destroyEvent.Nid) {
 				i.Remove()
 			}
 
@@ -227,7 +227,7 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 
 			for index, nid := range posTracks.Nid {
-				if getNid(g, i, nid) {
+				if GetNid(g, i, nid) {
 					*i.Pos() = Vec2{posTracks.X[index], posTracks.Y[index]}
 				}
 			}
@@ -237,7 +237,7 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 
 			for index, nid := range rotTracks.Nid {
-				if getNid(g, i, nid) {
+				if GetNid(g, i, nid) {
 					*i.Rot() = rotTracks.R[index]
 				}
 			}
@@ -247,7 +247,7 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 
 			for index, nid := range momentumTracks.Nid {
-				if getNid(g, i, nid) {
+				if GetNid(g, i, nid) {
 					*i.Momentum() = Vec2{momentumTracks.X[index], momentumTracks.Y[index]}
 				}
 			}
@@ -257,7 +257,7 @@ func (g *Game) Step(input *Input) {
 			i := g.E.NewIter()
 
 			for index, nid := range spinTracks.Nid {
-				if getNid(g, i, nid) {
+				if GetNid(g, i, nid) {
 					*i.Spin() = spinTracks.S[index]
 				}
 			}
@@ -266,7 +266,7 @@ func (g *Game) Step(input *Input) {
 			shipControlTrack := actual.ShipControlTrack
 			i := g.E.NewIter()
 
-			if getNid(g, i, shipControlTrack.Nid) {
+			if GetNid(g, i, shipControlTrack.Nid) {
 				sc := i.ShipControl()
 				sc.Up = shipControlTrack.Up
 				sc.Left = shipControlTrack.Left
@@ -277,7 +277,7 @@ func (g *Game) Step(input *Input) {
 			shootMissile := actual.ShootMissile
 
 			i := g.E.NewIter()
-			if getNid(g, i, shootMissile.Owner) {
+			if GetNid(g, i, shootMissile.Owner) {
 
 				const MissileSpeed = 13
 				momentum := *i.Momentum()

@@ -279,6 +279,28 @@ func (c *client) scheduleFrame() {
 var rotation = float32(0)
 
 func (c *client) frame() {
+	for _, memo := range c.inp.Memos {
+		switch actual := memo.Actual.(type) {
+		case *pb.Memo_DestroyEvent:
+			destroyEvent := actual.DestroyEvent
+			_ = destroyEvent
+
+			i := c.g.E.NewIter()
+			if game.GetNid(c.g, i, destroyEvent.Nid) {
+				if i.MissileDetails() != nil {
+					playSound("missileExplode")
+				}
+				if i.ShipControl() != nil {
+					playSound("explode")
+				}
+			}
+		case *pb.Memo_SpawnMissile:
+			playSound("shoot")
+		case *pb.Memo_SpawnShip:
+			playSound("enter")
+		}
+	}
+
 	const maximumStep = float32(1) / 20
 	for c.inp.Dt > maximumStep {
 		actualDt := c.inp.Dt
@@ -648,5 +670,4 @@ func playSound(name string) {
 	source.Set("buffer", clip)
 	source.Call("connect", audioContext.Get("destination"))
 	source.Call("start", 0)
-	log.Println("audioContextState:", audioContext.Get("state"))
 }
