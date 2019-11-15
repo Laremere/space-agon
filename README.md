@@ -1,5 +1,5 @@
 Space Agon is a demo integration of [Agones](https://agones.dev/) and
-[Open Match](https://open-match.dev/).  There will likely be a thurough guide at
+[Open Match](https://open-match.dev/).  There will likely be a thorough guide at
 some point soon, but for now it is possible to install it from the commands
 below.
 
