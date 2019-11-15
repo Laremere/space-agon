@@ -37,13 +37,13 @@
       </div>
       <div id="overlay-main-menu" hidden>
         <div id="title">Space Agon</div>
-        <div id="find-game" class="menu-item middle-choice" onclick="matchmake();">Find Game</div>
-        <div id="connect-to-server" class="menu-item lower-choice" onclick="setOverlay('overlay-choose-ip');">Connect To Server</div>
+        <div id="find-game" class="menu-item middle-choice" onclick="matchmake(); playSound('select');" onmouseover="playSound('hover');">Find Game</div>
+        <div id="connect-to-server" class="menu-item lower-choice" onclick="setOverlay('overlay-choose-ip');  playSound('select');" onmouseover="playSound('hover');">Connect To Server</div>
       </div>
       <div id="overlay-choose-ip" hidden>
         <input type="text" class="upper-choice" id="connection-address">
-        <div class="middle-choice menu-item" onclick="connect(document.getElementById('connection-address').value)">Connect</div>
-        <div class="lower-choice menu-item" onclick="setOverlay('overlay-main-menu');">Cancel</div>
+        <div class="middle-choice menu-item" onclick="connect(document.getElementById('connection-address').value);  playSound('select');" onmouseover="playSound('hover');">Connect</div>
+        <div class="lower-choice menu-item" onclick="setOverlay('overlay-main-menu'); playSound('select');" onmouseover="playSound('hover');">Cancel</div>
       </div>
       <div id="overlay-matchmaking" hidden>
         <div class="lower-choice">Finding match...</div>

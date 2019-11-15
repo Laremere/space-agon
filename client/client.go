@@ -32,6 +32,7 @@ import (
 )
 
 func main() {
+	loadSounds()
 	js.Global().Call("whenLoaded", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		newClient().scheduleFrame()
 		setOverlay("overlay-main-menu")
@@ -110,6 +111,11 @@ func newClient() *client {
 
 	js.Global().Set("setOverlay", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		setOverlay(args[0].String())
+		return nil
+	}))
+
+	js.Global().Set("playSound", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		playSound(args[0].String())
 		return nil
 	}))
 
@@ -540,4 +546,68 @@ func isMemoRecipient(cid int64, memo *pb.Memo) bool {
 		return true
 	}
 	panic("Unknown recipient type")
+}
+
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+//////////////////////////////////////////////////////
+
+// Being lazy and using globals...
+var audioClips = make(map[string]js.Value)
+
+var audioContext = js.Global().Get("window").Get("AudioContext").New()
+
+func loadSounds() {
+	clips := []string{
+		"enter",
+		"explode",
+		"hover",
+		"missileExplode",
+		"select",
+		"shoot",
+	}
+
+	wg := sync.WaitGroup{}
+	mapLock := sync.Mutex{}
+
+	for i := range clips {
+		wg.Add(1)
+		clip := clips[i]
+		request := js.Global().Get("XMLHttpRequest").New()
+		request.Call("open", "GET", "static/sounds/"+clip+".wav", true)
+		request.Set("responseType", "arraybuffer")
+		onError := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			fatalError(fmt.Errorf("Error loading sound %v", args[0]))
+			return nil
+		})
+
+		decodeCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			mapLock.Lock()
+			defer mapLock.Unlock()
+			audioClips[clip] = args[0]
+			wg.Done()
+			return nil
+		})
+
+		request.Set("onload", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			audioContext.Call("decodeAudioData", request.Get("response"), decodeCallback, onError)
+			return nil
+		}))
+
+		request.Call("send")
+	}
+
+	wg.Wait()
+}
+
+func playSound(name string) {
+	clip, ok := audioClips[name]
+	if !ok {
+		fatalError(fmt.Errorf("playSound with nonexistant clip: %s", name))
+	}
+	source := audioContext.Call("createBufferSource")
+	source.Set("buffer", clip)
+	source.Call("connect", audioContext.Get("destination"))
+	source.Call("start", 0)
+	log.Println("audioContextState:", audioContext.Get("state"))
 }
