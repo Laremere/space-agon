@@ -402,6 +402,47 @@ func (g *Game) Step(input *Input) {
 		case *pb.Memo_SpawnShip:
 			spawnShip := actual.SpawnShip
 
+			var pos Vec2
+			var r float32
+			{
+				type possibility struct {
+					pos     Vec2
+					r       float32
+					closest float32
+				}
+				possibilities := []possibility{}
+				for r := float32(0); r < math.Pi*2; r += math.Pi / 6 {
+					possibilities = append(possibilities, possibility{
+						pos:     Vec2FromRadians(r).Scale(14),
+						r:       r,
+						closest: float32(math.Inf(1)),
+					})
+				}
+				i := g.E.NewIter()
+				i.Require(PosKey)
+				i.Require(CanExplodeKey)
+
+				for i.Next() {
+					for j := range possibilities {
+						diff := i.Pos().Sub(possibilities[j].pos)
+						dist := diff.Length()
+						if dist < possibilities[j].closest {
+							possibilities[j].closest = dist
+						}
+					}
+				}
+
+				best := possibilities[0]
+				for _, j := range possibilities[1:] {
+					if j.closest > best.closest {
+						best = j
+					}
+				}
+
+				pos = best.pos
+				r = best.r
+			}
+
 			i := g.E.NewIter()
 			if spawnShip.Authority == input.Cid {
 				i.Require(NetworkTransmitKey)
@@ -423,9 +464,11 @@ func (g *Game) Step(input *Input) {
 			i.Require(CanExplodeKey)
 			i.New()
 
-			*i.Pos() = Vec2FromProto(spawnShip.Pos)
-			*i.Momentum() = Vec2FromProto(spawnShip.Momentum)
-			*i.Rot() = spawnShip.Rot
+			// *i.Pos() = Vec2FromProto(spawnShip.Pos)
+			// *i.Momentum() = Vec2FromProto(spawnShip.Momentum)
+			*i.Pos() = pos
+			*i.Momentum() = Vec2FromRadians(r + math.Pi/2).Scale(3.5)
+			*i.Rot() = r + math.Pi/2
 			*i.Spin() = spawnShip.Spin
 			// pos := i.Pos()
 			// (*pos)[0] = 7
@@ -451,10 +494,10 @@ func (g *Game) Step(input *Input) {
 			input.BroadcastAll(&pb.SpawnShip{
 				Nid:       g.NextNid(),
 				Authority: registerPlayer.Cid,
-				Pos:       (&Vec2{14, 0}).ToProto(),
-				Momentum:  (&Vec2{0, 3.5}).ToProto(),
-				Rot:       0,
-				Spin:      0,
+				// Pos:       (&Vec2{14, 0}).ToProto(),
+				// Momentum:  (&Vec2{0, 3.5}).ToProto(),
+				// Rot:  0,
+				// Spin: 0,
 			})
 
 		default:
