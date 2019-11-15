@@ -279,37 +279,30 @@ func (c *client) scheduleFrame() {
 var rotation = float32(0)
 
 func (c *client) frame() {
-	for _, memo := range c.inp.Memos {
-		switch actual := memo.Actual.(type) {
-		case *pb.Memo_DestroyEvent:
-			destroyEvent := actual.DestroyEvent
-			_ = destroyEvent
+	const maximumStep = float32(1) / 1
+	for c.inp.Dt > maximumStep {
+		c.inp.Dt = maximumStep
+	}
+	c.g.Step(c.inp)
 
-			i := c.g.E.NewIter()
-			if game.GetNid(c.g, i, destroyEvent.Nid) {
-				if i.MissileDetails() != nil {
-					playSound("missileExplode")
-				}
-				if i.ShipControl() != nil {
-					playSound("explode")
-				}
+	for _, memo := range append(c.inp.Memos, c.inp.MemosOut...) {
+		switch actual := memo.Actual.(type) {
+		case *pb.Memo_SpawnExplosion:
+			spawnExplosion := actual.SpawnExplosion
+
+			if spawnExplosion.IsShip {
+				playSound("explode")
+			} else {
+				playSound("missileExplode")
+
 			}
+
 		case *pb.Memo_SpawnMissile:
 			playSound("shoot")
 		case *pb.Memo_SpawnShip:
 			playSound("enter")
 		}
 	}
-
-	const maximumStep = float32(1) / 20
-	for c.inp.Dt > maximumStep {
-		actualDt := c.inp.Dt
-		c.inp.Dt = maximumStep
-		c.g.Step(c.inp)
-		c.inp.Dt = actualDt - maximumStep
-		c.inp.Memos = nil
-	}
-	c.g.Step(c.inp)
 
 	c.grLock.Lock()
 	defer c.grLock.Unlock()

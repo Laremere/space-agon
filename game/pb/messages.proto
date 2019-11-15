@@ -115,6 +115,7 @@ message SpawnMissile {
 message SpawnExplosion {
   vec2 pos = 1;
   vec2 momentum = 2;
+  bool is_ship = 3;
 }
 
 message SpawnShip {

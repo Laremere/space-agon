@@ -356,6 +356,7 @@ func (g *Game) Step(input *Input) {
 						input.BroadcastAll(&pb.SpawnExplosion{
 							Pos:      i.Pos().ToProto(),
 							Momentum: iMomentum.ToProto(),
+							IsShip:   i.ShipControl() != nil,
 						})
 						i.Remove()
 					}
@@ -694,6 +695,7 @@ func (g *Game) Step(input *Input) {
 				input.BroadcastAll(&pb.SpawnExplosion{
 					Pos:      i.Pos().ToProto(),
 					Momentum: i.Momentum().ToProto(),
+					IsShip:   i.ShipControl() != nil,
 				})
 				i.Remove()
 			}
@@ -713,6 +715,7 @@ func (g *Game) Step(input *Input) {
 				input.BroadcastAll(&pb.SpawnExplosion{
 					Pos:      i.Pos().ToProto(),
 					Momentum: i.Momentum().ToProto(),
+					IsShip:   i.ShipControl() != nil,
 				})
 				i.Remove()
 			}
@@ -742,6 +745,7 @@ func (g *Game) Step(input *Input) {
 					input.BroadcastAll(&pb.SpawnExplosion{
 						Pos:      i.Pos().ToProto(),
 						Momentum: i.Momentum().ToProto(),
+						IsShip:   i.ShipControl() != nil,
 					})
 					i.Remove()
 					break
