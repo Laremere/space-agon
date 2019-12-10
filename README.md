@@ -4,6 +4,8 @@ some point soon, but for now it is possible to install it from the commands
 below.
 
 # Pre-install steps:
+**Warning**: Be aware of billing charges for running the cluster.  Space Agon has been tested on this cluster size (nodes and machine types), but a small cluster may be sufficient for your use.  Don't leave the cluster running when you're not using it if you're concerned about cost.  See https://cloud.google.com/kubernetes-engine/pricing for more.
+
 ```
 # Create cluster
 gcloud container clusters create space-agon --cluster-version=1.12 \
