@@ -6,7 +6,7 @@ below.
 # Pre-install steps:
 ```
 # Create cluster
-gcloud container clusters create space-agon --cluster-version=1.12 \
+gcloud container clusters create space-agon --cluster-version=1.13 \
   --tags=game-server \
   --scopes=gke-default \
   --num-nodes=4 \
@@ -40,7 +40,7 @@ go test github.com/laremere/space-agon/... && \
 docker build . -f Frontend.Dockerfile -t $REGISTRY/space-agon-frontend:$TAG && \
 docker build . -f Dedicated.Dockerfile -t $REGISTRY/space-agon-dedicated:$TAG && \
 docker build . -f Director.Dockerfile -t $REGISTRY/space-agon-director:$TAG && \
-docker build . -f Mmf.Dockerfile -t $REGISTRY/space-agon-mmf:$TAG && \
+docker build . -f Mmf.Dockerfile -t $REGISTRY/space-agon-mm:fagone$TAG && \
 docker push $REGISTRY/space-agon-frontend:$TAG && \
 docker push $REGISTRY/space-agon-dedicated:$TAG && \
 docker push $REGISTRY/space-agon-director:$TAG && \

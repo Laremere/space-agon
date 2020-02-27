@@ -14,7 +14,7 @@ module github.com/laremere/space-agon
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-go 1.13
+go 1.14
 
 require (
 	agones.dev/agones v1.1.0

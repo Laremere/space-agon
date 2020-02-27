@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.13.0 as builder
+FROM golang:1.14.0 as builder
 ENV GO111MODULE=on
 
 WORKDIR /go/src/github.com/laremere/space-agon
